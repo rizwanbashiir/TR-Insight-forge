@@ -1,0 +1,33 @@
+# =========================
+# FASTAPI & SERVER
+# =========================
+fastapi==0.110.0
+uvicorn==0.29.0
+python-multipart==0.0.9
+
+# =========================
+# DATA PROCESSING
+# =========================
+pandas==2.2.2
+numpy==1.26.4
+
+# =========================
+# MACHINE LEARNING
+# =========================
+scikit-learn==1.4.2
+statsmodels==0.14.1
+
+# =========================
+# DATA VISUALIZATION (Optional Backend Use)
+# =========================
+matplotlib==3.8.4
+
+# =========================
+# AI / API INTEGRATION
+# =========================
+requests==2.31.0
+
+# =========================
+# UTILITIES
+# =========================
+python-dotenv==1.0.1
