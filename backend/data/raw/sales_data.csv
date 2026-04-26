@@ -1,0 +1,16 @@
+date,customer_id,customer_name,product_category,order_id,quantity,price,total_sales
+2024-01-01,101,Ali,Electronics,ORD001,2,500,1000
+2024-01-02,102,Sara,Fashion,ORD002,1,1200,1200
+2024-01-03,103,John,Grocery,ORD003,5,200,1000
+2024-01-04,104,Ayesha,Electronics,ORD004,1,1500,1500
+2024-01-05,105,David,Fashion,ORD005,3,700,2100
+2024-01-06,101,Ali,Electronics,ORD006,2,600,1200
+2024-01-07,106,Emma,Grocery,ORD007,4,250,1000
+2024-01-08,107,Noah,Fashion,ORD008,2,900,1800
+2024-01-09,108,Olivia,Electronics,ORD009,1,2000,2000
+2024-01-10,109,Liam,Grocery,ORD010,6,180,1080
+2024-01-11,110,Sophia,Fashion,ORD011,2,1100,2200
+2024-01-12,111,James,Electronics,ORD012,1,2500,2500
+2024-01-13,112,Mia,Grocery,ORD013,3,300,900
+2024-01-14,113,Ben,Fashion,ORD014,2,800,1600
+2024-01-15,114,Lucas,Electronics,ORD015,1,1800,1800
