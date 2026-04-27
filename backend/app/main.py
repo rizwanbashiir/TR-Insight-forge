@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from app.routes import upload
 from app.routes import analytics
+from app.routes import ml
+from app.routes import ai
 
 app = FastAPI(
     title="TR InsightForge Backend",
@@ -18,6 +20,16 @@ app.include_router(
     analytics.router,
     prefix="/analytics",
     tags=["Analytics"]
+)
+app.include_router(
+    ml.router,
+    prefix="/ml",
+    tags=["Machine Learning"]
+)
+app.include_router(
+    ai.router,
+    prefix="/ai",
+    tags=["AI Recommendations"]
 )
 @app.get("/")
 def root():

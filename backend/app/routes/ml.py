@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 import pandas as pd
+from app.services.segmentation import run_customer_segmentation
 
 from app.services.forecasting import run_arima_forecast
 
@@ -19,4 +20,18 @@ def get_forecast():
     return {
         "status": "success",
         "forecast_report": result
+    }
+@router.get("/segmentation")
+def get_segmentation():
+    """
+    Customer segmentation using RFM + KMeans
+    """
+
+    df = pd.read_csv("data/raw/dirty_sales_data.csv")
+
+    result = run_customer_segmentation(df)
+
+    return {
+        "status": "success",
+        "segmentation_report": result
     }
