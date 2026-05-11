@@ -5,6 +5,8 @@ from app.config.database import get_db
 from app.schemas.upload import UploadResponse, FileType
 from app.services.upload_service import save_uploaded_file
 from app.utils.dependencies import get_current_user
+from app.services.preprocessing import run_preprocessing_pipeline
+from app.schemas.upload import UploadResponse, FileType, FileStatus
 from app.models.users import User
 
 router = APIRouter()
@@ -106,3 +108,44 @@ def list_my_files(
         }
         for f in files
     ]
+
+
+@router.post("/preprocess/{file_id}", status_code=200)
+def preprocess_file(
+    file_id     : int,
+    db          : Session    = Depends(get_db),
+    current_user: User       = Depends(get_current_user),
+):
+    """
+    Trigger preprocessing for an uploaded file.
+    Cleans data, detects issues, computes KPIs.
+    Saves results to processed_datasets table.
+    """
+    from app.models.uploaded_file import UploadedFile
+
+    # Verify file belongs to this user
+    file_record = db.query(UploadedFile).filter(
+        UploadedFile.id      == file_id,
+        UploadedFile.user_id == current_user.id
+    ).first()
+
+    if not file_record:
+        raise HTTPException(status_code=404, detail="File not found.")
+
+    if file_record.status == FileStatus.processing:
+        raise HTTPException(status_code=400, detail="File is already being processed.")
+
+    # Run the full pipeline
+    result = run_preprocessing_pipeline(db=db, file_id=file_id)
+
+    return {
+        "file_id"          : file_id,
+        "status"           : "processed",
+        "total_rows"       : result.total_rows,
+        "duplicates_removed": result.duplicate_count,
+        "missing_values"   : result.missing_values,
+        "outliers_detected": result.outliers_detected,
+        "column_types"     : result.column_types,
+        "kpi_summary"      : result.kpi_summary,
+        "message"          : "Preprocessing complete. KPIs computed successfully."
+    }
