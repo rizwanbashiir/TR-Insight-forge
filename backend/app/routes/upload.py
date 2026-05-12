@@ -7,6 +7,10 @@ from app.services.upload_service import save_uploaded_file
 from app.utils.dependencies import get_current_user
 from app.services.preprocessing import run_preprocessing_pipeline
 from app.schemas.upload import UploadResponse, FileType, FileStatus
+from app.services.pinecone_service import embed_and_store
+from app.models.uploaded_file import UploadedFile
+from app.models.processed_dataset import ProcessedDataset
+from app.services.pinecone_service import embedding_model, get_pinecone_index
 from app.models.users import User
 
 router = APIRouter()
@@ -148,4 +152,43 @@ def preprocess_file(
         "column_types"     : result.column_types,
         "kpi_summary"      : result.kpi_summary,
         "message"          : "Preprocessing complete. KPIs computed successfully."
+    }
+
+
+
+@router.post("/embed/{file_id}", status_code=200)
+def embed_file(
+    file_id     : int,
+    db          : Session = Depends(get_db),
+    current_user: User    = Depends(get_current_user),
+):
+    """
+    Embed processed KPI data into Pinecone for RAG.
+    Must run /preprocess/{file_id} first.
+    """
+   
+
+    file_record = db.query(UploadedFile).filter(
+        UploadedFile.id      == file_id,
+        UploadedFile.user_id == current_user.id
+    ).first()
+
+    if not file_record:
+        raise HTTPException(status_code=404, detail="File not found.")
+
+    if file_record.status != FileStatus.processed:
+        raise HTTPException(
+            status_code=400,
+            detail="File must be preprocessed before embedding. "
+                   "Call /upload/preprocess/{file_id} first."
+        )
+
+    result = embed_and_store(db=db, file_id=file_id)
+
+    return {
+        "message"      : "Data successfully embedded into Pinecone.",
+        "file_id"      : result["file_id"],
+        "chunks_stored": result["chunks_stored"],
+        "vector_dim"   : result["vector_dim"],
+        "chunk_ids"    : result["chunk_ids"],
     }
