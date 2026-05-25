@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     PINECONE_API_KEY:str= "pcsk_4EtQAk_UDX8darV4qXEVigw2gAsQE8ibNMGZ98hpmzevz8TvmNoNhH1H9yk68sTvGqf6CR"
     PINECONE_INDEX_NAME:str = "trinsightforge"
 
+    # Ollama
+    OLLAMA_BASE_URL : str = "http://localhost:11434"
+    OLLAMA_MODEL    : str = "llama3.2"
+
     class Config:
         env_file = ".env"
 
