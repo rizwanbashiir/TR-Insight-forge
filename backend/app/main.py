@@ -61,7 +61,7 @@ from app.routes import ai
 from app.routes import upload
 from app.services.ollama_service import check_ollama_health
 from app.config.settings import settings
-from app.routes import auth_routes, upload, ai, forcast
+from app.routes import auth_routes, upload, ai, forcast,segments
 
 
 Base.metadata.create_all(bind=engine)
@@ -83,9 +83,8 @@ app.add_middleware(
 app.include_router(auth_routes.router,   prefix="/auth",   tags=["Auth"])
 app.include_router(upload.router, prefix="/upload", tags=["Upload"])
 app.include_router(ai.router, prefix="/ai", tags=["AI"])
-
-
 app.include_router(forcast.router, prefix="/forecast", tags=["Forecast"])
+app.include_router(segments.router, prefix="/segment", tags=["Segmentation"])
 
 @app.get("/")
 def root():
