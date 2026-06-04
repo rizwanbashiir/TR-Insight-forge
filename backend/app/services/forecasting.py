@@ -11,15 +11,20 @@ from app.models.forecast_result import ForecastResult
 from app.models.uploaded_file import UploadedFile
 
 
-def load_timeseries(db: Session, file_id: int) -> pd.Series:
+from typing import Union, List
+
+def load_timeseries(db: Session, file_ids: Union[int, List[int]]) -> pd.Series:
     """
     Load raw_data_rows and build a clean monthly time-series.
     Averages across stores instead of summing — removes spike distortion.
     """
+    if isinstance(file_ids, int):
+        file_ids = [file_ids]
+
     rows = (
         db.query(RawDataRow)
         .filter(
-            RawDataRow.file_id    == file_id,
+            RawDataRow.file_id.in_(file_ids),
             RawDataRow.date_col   != None,
             RawDataRow.amount_col != None,
         )
@@ -105,84 +110,171 @@ def compute_mape(actual: pd.Series, predicted: pd.Series) -> float:
     return round(float(mape), 2)
 
 
-def run_arima_forecast(
-    db     : Session,
-    file_id: int,
-    steps  : int = 6
-) -> ForecastResult:
+def run_fallback_forecast(monthly: pd.Series, steps: int) -> dict:
     """
-    Full ARIMA pipeline with improved accuracy.
-    Uses mean aggregation and wider parameter search.
+    Fallback forecasting for short time-series (< 6 months).
+    Fits a linear regression trend line or projects flat.
     """
-
-    # 1. Load clean time-series
-    monthly = load_timeseries(db, file_id)
-
-    if len(monthly) < 6:
-        raise ValueError(
-            f"Need at least 6 months of data. Found {len(monthly)}."
-        )
-
-    # 2. Train/test split 80/20
-    split_idx = int(len(monthly) * 0.8)
-    train     = monthly.iloc[:split_idx]
-    test      = monthly.iloc[split_idx:]
-
-    # 3. Find best order on training data
-    best_order = find_best_arima_order(train)
-
-    # 4. Fit on full data
-    model  = ARIMA(monthly, order=best_order)
-    fitted = model.fit()
-
-    # 5. Validate on test set
-    test_pred = fitted.predict(
-        start=test.index[0],
-        end  =test.index[-1],
-    )
-    mape = compute_mape(test, test_pred)
-
-    # 6. Forecast next N months
-    fc_result = fitted.get_forecast(steps=steps)
-    fc_mean   = fc_result.predicted_mean
-    fc_ci     = fc_result.conf_int(alpha=0.05)
-
-    # 7. Build response data
+    n = len(monthly)
     historical = [
         {"date": str(d.strftime("%Y-%m")), "value": round(float(v), 2)}
         for d, v in monthly.items()
     ]
 
     forecast_list = []
-    for date, val in fc_mean.items():
-        lower = float(fc_ci.loc[date].iloc[0])
-        upper = float(fc_ci.loc[date].iloc[1])
-        forecast_list.append({
-            "date"    : str(date.strftime("%Y-%m")),
-            "value"   : round(float(val), 2),
-            "lower_ci": round(lower, 2),
-            "upper_ci": round(upper, 2),
-        })
+    last_date = monthly.index[-1]
+    # Generate future dates
+    future_dates = pd.date_range(
+        start=last_date + pd.offsets.MonthEnd(1),
+        periods=steps,
+        freq="M"
+    )
 
-    forecast_data = {
+    if n >= 2:
+        x = np.arange(n)
+        y = monthly.values
+        m, c = np.polyfit(x, y, 1)
+
+        # Estimate standard deviation of residuals for confidence intervals
+        residuals = y - (m * x + c)
+        std_err = np.std(residuals) if len(residuals) > 1 else np.std(y) * 0.1
+        if std_err == 0:
+            std_err = y.mean() * 0.1 if y.mean() != 0 else 1.0
+
+        for i, date in enumerate(future_dates):
+            val = m * (n + i) + c
+            # Prevent negative sales sales forecast if historical data is strictly non-negative
+            if (y >= 0).all() and val < 0:
+                val = 0.0
+            lower = val - 1.96 * std_err
+            upper = val + 1.96 * std_err
+            forecast_list.append({
+                "date"    : str(date.strftime("%Y-%m")),
+                "value"   : round(float(val), 2),
+                "lower_ci": round(float(max(0.0, lower) if (y >= 0).all() else lower), 2),
+                "upper_ci": round(float(upper), 2),
+            })
+        mape_score = compute_mape(monthly, pd.Series(m * x + c, index=monthly.index))
+        arima_order = "Fallback (LR)"
+    else:
+        val = float(monthly.values[0]) if n == 1 else 0.0
+        std_err = val * 0.1 if val != 0 else 1.0
+        for date in future_dates:
+            lower = val - 1.96 * std_err
+            upper = val + 1.96 * std_err
+            forecast_list.append({
+                "date"    : str(date.strftime("%Y-%m")),
+                "value"   : round(val, 2),
+                "lower_ci": round(float(max(0.0, lower)), 2),
+                "upper_ci": round(float(upper), 2),
+            })
+        mape_score = 0.0
+        arima_order = "Fallback (Flat)"
+
+    return {
         "historical": historical,
         "forecast"  : forecast_list,
+        "mape_score": mape_score,
+        "arima_order": arima_order,
     }
 
-    # 8. Save to DB
+
+def run_arima_forecast(
+    db      : Session,
+    file_ids: Union[int, List[int]],
+    steps   : int = 6
+) -> ForecastResult:
+    """
+    Full ARIMA pipeline with improved accuracy.
+    Uses mean aggregation and wider parameter search.
+    """
+    if isinstance(file_ids, int):
+        file_ids = [file_ids]
+
+    primary_file_id = file_ids[0]
+
+    # 1. Load clean time-series
+    monthly = load_timeseries(db, file_ids)
+
+    if len(monthly) == 0:
+        raise ValueError("No historical monthly data found to run forecast.")
+
+    model_name = "ARIMA"
+    if len(monthly) < 6:
+        # Fallback to linear regression/flat projection
+        fallback_res = run_fallback_forecast(monthly, steps)
+        best_order = fallback_res["arima_order"]
+        mape = fallback_res["mape_score"]
+        forecast_data = {
+            "historical": fallback_res["historical"],
+            "forecast"  : fallback_res["forecast"],
+        }
+        model_name = "Linear Regression (Fallback)" if len(monthly) >= 2 else "Flat Projection (Fallback)"
+    else:
+        # 2. Train/test split 80/20
+        split_idx = int(len(monthly) * 0.8)
+        train     = monthly.iloc[:split_idx]
+        test      = monthly.iloc[split_idx:]
+
+        # 3. Find best order on training data
+        best_order = find_best_arima_order(train)
+
+        # 4. Fit on full data
+        model  = ARIMA(monthly, order=best_order)
+        fitted = model.fit()
+
+        # 5. Validate on test set
+        test_pred = fitted.predict(
+            start=test.index[0],
+            end  =test.index[-1],
+        )
+        mape = compute_mape(test, test_pred)
+
+        # 6. Forecast next N months
+        fc_result = fitted.get_forecast(steps=steps)
+        fc_mean   = fc_result.predicted_mean
+        fc_ci     = fc_result.conf_int(alpha=0.05)
+
+        # 7. Build response data
+        historical = [
+            {"date": str(d.strftime("%Y-%m")), "value": round(float(v), 2)}
+            for d, v in monthly.items()
+        ]
+
+        forecast_list = []
+        for date, val in fc_mean.items():
+            lower = float(fc_ci.loc[date].iloc[0])
+            upper = float(fc_ci.loc[date].iloc[1])
+            forecast_list.append({
+                "date"    : str(date.strftime("%Y-%m")),
+                "value"   : round(float(val), 2),
+                "lower_ci": round(lower, 2),
+                "upper_ci": round(upper, 2),
+            })
+
+        forecast_data = {
+            "historical": historical,
+            "forecast"  : forecast_list,
+        }
+
+    # Store associated file IDs in the forecast data
+    forecast_data["associated_file_ids"] = file_ids
+
+    # 8. Save to DB under primary file ID
     existing = db.query(ForecastResult).filter(
-        ForecastResult.file_id == file_id
+        ForecastResult.file_id == primary_file_id
     ).first()
 
     if existing:
+        existing.model_name    = model_name
         existing.arima_order   = str(best_order)
         existing.mape_score    = mape
         existing.forecast_data = forecast_data
         result = existing
     else:
         result = ForecastResult(
-            file_id       = file_id,
-            model_name    = "ARIMA",
+            file_id       = primary_file_id,
+            model_name    = model_name,
             arima_order   = str(best_order),
             mape_score    = mape,
             forecast_data = forecast_data,

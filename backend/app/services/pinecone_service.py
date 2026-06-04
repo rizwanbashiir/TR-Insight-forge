@@ -187,11 +187,13 @@ def embed_and_store(
 
 
 # ── Search Pinecone (used by RAG later) ──────────────────────────────
+from typing import Union, List
+
 def search_similar_chunks(
-    query  : str,
-    user_id: int,
-    file_id: int = None,
-    top_k  : int = 5
+    query   : str,
+    user_id : int,
+    file_ids: Union[int, List[int]] = None,
+    top_k   : int = 5
 ) -> list[dict]:
     """
     Convert a question into a vector and find
@@ -204,8 +206,14 @@ def search_similar_chunks(
 
     # Build filter — only return chunks for this user
     pinecone_filter = {"user_id": {"$eq": user_id}}
-    if file_id:
-        pinecone_filter["file_id"] = {"$eq": file_id}
+    if file_ids is not None:
+        if isinstance(file_ids, list):
+            if len(file_ids) == 1:
+                pinecone_filter["file_id"] = {"$eq": file_ids[0]}
+            elif len(file_ids) > 1:
+                pinecone_filter["file_id"] = {"$in": file_ids}
+        else:
+            pinecone_filter["file_id"] = {"$eq": file_ids}
 
     # Search
     index   = get_pinecone_index()

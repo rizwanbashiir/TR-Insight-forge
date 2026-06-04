@@ -1,4 +1,14 @@
+import os
+from pathlib import Path
 from pydantic_settings import BaseSettings
+
+# Resolve path to .env file by traversing parent directories
+env_file_path = ".env"
+for parent in Path(__file__).resolve().parents:
+    possible_env = parent / ".env"
+    if possible_env.is_file():
+        env_file_path = str(possible_env)
+        break
 
 class Settings(BaseSettings):
     # Database
@@ -17,7 +27,13 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL : str = "http://localhost:11434"
     OLLAMA_MODEL    : str = "llama3.2"
 
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str = ""
+
+    # Predefined Admin Settings
+    PREDEFINED_ADMIN_EMAILS: str = "admin@example.com,admin@insightforge.com"
+
     class Config:
-        env_file = ".env"
+        env_file = env_file_path
 
 settings = Settings()

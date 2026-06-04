@@ -12,23 +12,23 @@ from app.models.segment_result import SegmentResult
 from app.models.uploaded_file import UploadedFile
 
 
-# ── Step 1: Load data from DB into DataFrame ─────────────────────────
+from typing import Union, List
+
 def load_data_for_segmentation(
-    db     : Session,
-    file_id: int
+    db      : Session,
+    file_ids: Union[int, List[int]]
 ) -> pd.DataFrame:
-    """
-    Load raw_data_rows and convert to DataFrame.
-    We use the full raw_data JSONB for RFM computation.
-    """
+    if isinstance(file_ids, int):
+        file_ids = [file_ids]
+
     rows = (
         db.query(RawDataRow)
-        .filter(RawDataRow.file_id == file_id)
+        .filter(RawDataRow.file_id.in_(file_ids))
         .all()
     )
 
     if not rows:
-        raise ValueError(f"No data found for file_id {file_id}")
+        raise ValueError(f"No data found for file_ids {file_ids}")
 
     records = [row.raw_data for row in rows]
     df      = pd.DataFrame(records)
@@ -252,10 +252,48 @@ def label_segments(rfm: pd.DataFrame) -> list[dict]:
     return segments
 
 
+def run_fallback_segmentation(rfm: pd.DataFrame) -> tuple[pd.DataFrame, float]:
+    """
+    Fallback customer segmentation for small datasets (< 4 customers).
+    Assigns segments based on simple heuristics instead of K-Means.
+    """
+    rfm = rfm.copy()
+
+    # Simple heuristics to classify 1-3 customers
+    # Median monetary value and median recency (or defaults if only 1 customer)
+    med_monetary = rfm["Monetary"].median() if len(rfm) > 1 else 0
+    med_recency  = rfm["Recency"].median() if len(rfm) > 1 else 0
+
+    clusters = []
+    for _, row in rfm.iterrows():
+        # Score-based assignment matching segment ranking:
+        # Retention (Best): Low Recency (recent) + High Monetary
+        # Upsell (Small but recent): Low Recency + Low Monetary
+        # Win-back (Lapsed spender): High Recency + High Monetary
+        # Nurture (Inactive small spender): High Recency + Low Monetary
+
+        is_recent = row["Recency"] <= med_recency
+        is_high_value = row["Monetary"] >= med_monetary
+
+        if is_recent and is_high_value:
+            cluster = 0  # Retention
+        elif is_recent and not is_high_value:
+            cluster = 1  # Upsell
+        elif not is_recent and is_high_value:
+            cluster = 2  # Win-back
+        else:
+            cluster = 3  # Nurture
+
+        clusters.append(cluster)
+
+    rfm["Cluster"] = clusters
+    return rfm, 0.0  # Silhouette score is 0.0 since clustering wasn't used
+
+
 # ── Step 6: Main pipeline ─────────────────────────────────────────────
 def run_segmentation_pipeline(
-    db     : Session,
-    file_id: int,
+    db      : Session,
+    file_ids: Union[int, List[int]],
 ) -> SegmentResult:
     """
     Full segmentation pipeline:
@@ -266,9 +304,13 @@ def run_segmentation_pipeline(
     5. Label segments
     6. Save to segment_results table
     """
+    if isinstance(file_ids, int):
+        file_ids = [file_ids]
+
+    primary_file_id = file_ids[0]
 
     # 1. Load
-    df = load_data_for_segmentation(db, file_id)
+    df = load_data_for_segmentation(db, file_ids)
 
     # 2. Detect columns
     cols = detect_columns(df)
@@ -277,17 +319,21 @@ def run_segmentation_pipeline(
     # 3. RFM
     rfm = compute_rfm(df, cols)
 
-    if len(rfm) < 4:
-        raise ValueError(
-            f"Need at least 4 unique customers for segmentation. "
-            f"Found {len(rfm)}."
-        )
+    if len(rfm) == 0:
+        raise ValueError("No customer data found for segmentation.")
 
     # 4. Cluster
-    rfm_clustered, sil_score = run_kmeans(rfm)
+    if len(rfm) < 4:
+        rfm_clustered, sil_score = run_fallback_segmentation(rfm)
+    else:
+        rfm_clustered, sil_score = run_kmeans(rfm)
 
     # 5. Label
     segments = label_segments(rfm_clustered)
+
+    # Store associated file IDs in the segment data
+    for s in segments:
+        s["associated_file_ids"] = file_ids
 
     # 6. Save per-customer RFM scores (for export)
     customer_col = cols["customer"] or "index"
@@ -304,9 +350,9 @@ def run_segmentation_pipeline(
             elif isinstance(v, (np.floating,)):
                 r[k] = round(float(v), 4)
 
-    # 7. Save to DB
+    # 7. Save to DB under primary file ID
     existing = db.query(SegmentResult).filter(
-        SegmentResult.file_id == file_id
+        SegmentResult.file_id == primary_file_id
     ).first()
 
     if existing:
@@ -316,7 +362,7 @@ def run_segmentation_pipeline(
         result = existing
     else:
         result = SegmentResult(
-            file_id          = file_id,
+            file_id          = primary_file_id,
             silhouette_score = sil_score,
             segment_data     = segments,
             rfm_scores       = rfm_records[:500],

@@ -22,6 +22,7 @@ class UploadedFile(Base):
 
     id                = Column(Integer, primary_key=True, index=True)
     user_id           = Column(Integer, ForeignKey("users.id"), nullable=False)
+    organization_id   = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True)
     original_filename = Column(String(255), nullable=False)
     file_format       = Column(String(10))
     file_type         = Column(Enum(FileType), nullable=False)
@@ -36,3 +37,4 @@ class UploadedFile(Base):
     forecast_result   = relationship("ForecastResult", back_populates="file", uselist=False)
     segment_result    = relationship("SegmentResult", back_populates="file", uselist=False)
     ai_insight        = relationship("AiInsight", back_populates="file", uselist=False)
+    organization      = relationship("Organization", back_populates="uploaded_files")

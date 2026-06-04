@@ -33,7 +33,17 @@ def parse_uploaded_file(file: UploadFile) -> tuple[pd.DataFrame, str]:
 
     try:
         if filename.endswith(".csv"):
-            df = pd.read_csv(BytesIO(contents))
+            encodings = ["utf-8", "utf-8-sig", "latin-1", "cp1252"]
+            parsed = False
+            for encoding in encodings:
+                try:
+                    df = pd.read_csv(BytesIO(contents), encoding=encoding)
+                    parsed = True
+                    break
+                except (UnicodeDecodeError, ValueError):
+                    continue
+            if not parsed:
+                df = pd.read_csv(BytesIO(contents), encoding="utf-8")
             fmt = "csv"
         elif filename.endswith((".xlsx", ".xls")):
             df = pd.read_excel(BytesIO(contents))
@@ -42,7 +52,17 @@ def parse_uploaded_file(file: UploadFile) -> tuple[pd.DataFrame, str]:
             df = pd.read_json(BytesIO(contents))
             fmt = "json"
         elif filename.endswith(".tsv"):
-            df = pd.read_csv(BytesIO(contents), sep="\t")
+            encodings = ["utf-8", "utf-8-sig", "latin-1", "cp1252"]
+            parsed = False
+            for encoding in encodings:
+                try:
+                    df = pd.read_csv(BytesIO(contents), sep="\t", encoding=encoding)
+                    parsed = True
+                    break
+                except (UnicodeDecodeError, ValueError):
+                    continue
+            if not parsed:
+                df = pd.read_csv(BytesIO(contents), sep="\t", encoding="utf-8")
             fmt = "tsv"
         else:
             raise HTTPException(
@@ -115,7 +135,8 @@ def save_uploaded_file(
     db       : Session,
     file     : UploadFile,
     file_type: str,
-    user_id  : int
+    user_id  : int,
+    organization_id: int
 ) -> UploadedFile:
     """
     Full pipeline:
@@ -128,6 +149,10 @@ def save_uploaded_file(
     # Step 1 — parse
     df, file_format = parse_uploaded_file(file)
 
+    # Verify row count limits
+    from app.services.quotas import verify_limits_and_tier
+    verify_limits_and_tier(db, organization_id, "row_count", len(df))
+
     # Step 2 — detect key columns
     date_col_name   = detect_date_column(df)
     amount_col_name = detect_amount_column(df, file_type)
@@ -135,6 +160,7 @@ def save_uploaded_file(
     # Step 3 — create uploaded_files record
     uploaded_file = UploadedFile(
         user_id          = user_id,
+        organization_id  = organization_id,
         original_filename= file.filename,
         file_format      = file_format,
         file_type        = file_type,

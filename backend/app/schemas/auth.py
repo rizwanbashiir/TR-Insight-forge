@@ -35,3 +35,10 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type:   str = "bearer"
     user:         UserResponse
+
+class VerifyRequest(BaseModel):
+    email: EmailStr
+    code:  str
+
+class GoogleLoginRequest(BaseModel):
+    token: str
