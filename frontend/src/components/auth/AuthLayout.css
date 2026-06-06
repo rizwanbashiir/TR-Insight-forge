@@ -1,0 +1,71 @@
+.auth-layout {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.auth-left {
+  flex: 1;
+  background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 3rem;
+  color: white;
+}
+
+.auth-logo {
+  display: flex;
+}
+
+.auth-logo a {
+  text-decoration: none;
+  font-size: 1.25rem;
+}
+
+.bg-white\/20 {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.auth-testimonial {
+  max-width: 450px;
+}
+
+.testimonial-text {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 2rem;
+}
+
+.author-name {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.author-role {
+  font-size: 0.875rem;
+  opacity: 0.8;
+}
+
+.auth-right {
+  flex: 1;
+  background-color: #fafafa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+@media (max-width: 900px) {
+  .auth-layout {
+    flex-direction: column;
+  }
+  .auth-left {
+    display: none; /* Hide testimonial on mobile to match common auth patterns */
+  }
+  .auth-right {
+    min-height: 100vh;
+  }
+}
