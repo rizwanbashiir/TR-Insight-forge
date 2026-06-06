@@ -33,6 +33,7 @@ class UserResponse(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type:   str = "bearer"
     user:         UserResponse
 
@@ -42,3 +43,6 @@ class VerifyRequest(BaseModel):
 
 class GoogleLoginRequest(BaseModel):
     token: str
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str

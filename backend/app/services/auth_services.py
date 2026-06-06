@@ -28,6 +28,14 @@ def create_access_token(data: dict) -> str:
     payload.update({"exp": expire})
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
+def create_refresh_token(data: dict) -> str:
+    payload = data.copy()
+    expire  = datetime.utcnow() + timedelta(
+        minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES
+    )
+    payload.update({"exp": expire, "type": "refresh"})
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
 def decode_access_token(token: str) -> dict:
     try:
         return jwt.decode(token, settings.SECRET_KEY,
@@ -144,7 +152,8 @@ def login_user(db: Session, data: LoginRequest) -> dict:
             detail="Please verify your email before logging in."
         )
     token = create_access_token({"sub": str(user.id), "role": user.role})
-    return {"token": token, "user": user}
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+    return {"token": token, "refresh_token": refresh_token, "user": user}
 
 def register_or_login_google(db: Session, token: str) -> dict:
     # 1. Verify token with Google API
@@ -206,4 +215,25 @@ def register_or_login_google(db: Session, token: str) -> dict:
 
     # 4. Generate JWT
     access_token = create_access_token({"sub": str(user.id), "role": user.role})
-    return {"token": access_token, "user": user}
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+    return {"token": access_token, "refresh_token": refresh_token, "user": user}
+
+def refresh_access_token(db: Session, refresh_token: str) -> dict:
+    try:
+        payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+        
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+            
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if not user or not user.is_active:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+            
+        new_access_token = create_access_token({"sub": str(user.id), "role": user.role})
+        new_refresh_token = create_refresh_token({"sub": str(user.id)})
+        return {"token": new_access_token, "refresh_token": new_refresh_token, "user": user}
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token")
