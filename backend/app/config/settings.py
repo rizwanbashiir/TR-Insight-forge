@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "your-super-secret-key-change-this-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+    REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
     #pinecone
     PINECONE_API_KEY:str= "pcsk_4EtQAk_UDX8darV4qXEVigw2gAsQE8ibNMGZ98hpmzevz8TvmNoNhH1H9yk68sTvGqf6CR"
@@ -29,6 +30,7 @@ class Settings(BaseSettings):
 
     # Google OAuth
     GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
 
     # Predefined Admin Settings
     PREDEFINED_ADMIN_EMAILS: str = "admin@example.com,admin@insightforge.com"
