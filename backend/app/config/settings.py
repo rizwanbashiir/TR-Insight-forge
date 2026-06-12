@@ -35,7 +35,12 @@ class Settings(BaseSettings):
     # Predefined Admin Settings
     PREDEFINED_ADMIN_EMAILS: str = "admin@example.com,admin@insightforge.com"
 
+    # Grok Settings
+    GROK_API_KEY: str = ""
+    GROK_API_URL: str = "https://api.groq.com/openai/v1/chat/completions"
+
     class Config:
         env_file = env_file_path
+        extra = "ignore"
 
 settings = Settings()

@@ -179,15 +179,144 @@ def run_fallback_forecast(monthly: pd.Series, steps: int) -> dict:
     }
 
 
+def run_arima_forecast_df(
+    df: pd.DataFrame,
+    steps: int = 6
+) -> dict:
+    """
+    ARIMA forecasting directly on a pandas DataFrame.
+    """
+    # 1. Normalize and detect columns
+    df_copy = df.copy()
+    df_copy.columns = [c.strip().lower().replace(" ", "_") for c in df_copy.columns]
+
+    date_col = None
+    for c in ["date", "order_date", "transaction_date", "date_col"]:
+        if c in df_copy.columns:
+            date_col = c
+            break
+    if not date_col:
+        for c in df_copy.columns:
+            if "date" in c.lower():
+                date_col = c
+                break
+
+    amount_col = None
+    for c in ["total_sales", "sales", "revenue", "amount", "amount_col"]:
+        if c in df_copy.columns:
+            amount_col = c
+            break
+    if not amount_col:
+        for c in df_copy.columns:
+            if "sales" in c.lower() or "revenue" in c.lower() or "amount" in c.lower():
+                amount_col = c
+                break
+
+    if not date_col or not amount_col:
+        raise ValueError(
+            "Could not detect date or amount columns. "
+            f"Available columns: {list(df.columns)}"
+        )
+
+    df_copy[date_col] = pd.to_datetime(df_copy[date_col], errors="coerce")
+    df_copy = df_copy.dropna(subset=[date_col])
+    df_copy[amount_col] = pd.to_numeric(df_copy[amount_col], errors="coerce").fillna(0)
+
+    # Set index and resample
+    df_indexed = df_copy[[date_col, amount_col]].set_index(date_col)
+    monthly = df_indexed[amount_col].resample("M").mean()
+
+    # Remove any extreme outliers using IQR
+    if len(monthly) >= 4:
+        Q1    = monthly.quantile(0.25)
+        Q3    = monthly.quantile(0.75)
+        IQR   = Q3 - Q1
+        lower = Q1 - 3.0 * IQR
+        upper = Q3 + 3.0 * IQR
+        monthly = monthly.clip(lower=lower, upper=upper)
+
+    if len(monthly) == 0:
+        raise ValueError("No historical monthly data found to run forecast.")
+
+    model_name = "ARIMA"
+    if len(monthly) < 6:
+        # Fallback to linear regression/flat projection
+        fallback_res = run_fallback_forecast(monthly, steps)
+        best_order = fallback_res["arima_order"]
+        mape = fallback_res["mape_score"]
+        forecast_data = {
+            "historical": fallback_res["historical"],
+            "forecast"  : fallback_res["forecast"],
+        }
+        model_name = "Linear Regression (Fallback)" if len(monthly) >= 2 else "Flat Projection (Fallback)"
+    else:
+        # 2. Train/test split 80/20
+        split_idx = int(len(monthly) * 0.8)
+        train     = monthly.iloc[:split_idx]
+        test      = monthly.iloc[split_idx:]
+
+        # 3. Find best order on training data
+        best_order = find_best_arima_order(train)
+
+        # 4. Fit on full data
+        model  = ARIMA(monthly, order=best_order)
+        fitted = model.fit()
+
+        # 5. Validate on test set
+        test_pred = fitted.predict(
+            start=test.index[0],
+            end  =test.index[-1],
+        )
+        mape = compute_mape(test, test_pred)
+
+        # 6. Forecast next N months
+        fc_result = fitted.get_forecast(steps=steps)
+        fc_mean   = fc_result.predicted_mean
+        fc_ci     = fc_result.conf_int(alpha=0.05)
+
+        # 7. Build response data
+        historical = [
+            {"date": str(d.strftime("%Y-%m")), "value": round(float(v), 2)}
+            for d, v in monthly.items()
+        ]
+
+        forecast_list = []
+        for date, val in fc_mean.items():
+            lower = float(fc_ci.loc[date].iloc[0])
+            upper = float(fc_ci.loc[date].iloc[1])
+            forecast_list.append({
+                "date"    : str(date.strftime("%Y-%m")),
+                "value"   : round(float(val), 2),
+                "lower_ci": round(lower, 2),
+                "upper_ci": round(upper, 2),
+            })
+
+        forecast_data = {
+            "historical": historical,
+            "forecast"  : forecast_list,
+        }
+
+    return {
+        "model"      : model_name,
+        "arima_order": str(best_order),
+        "mape_score" : mape,
+        "accuracy"   : f"{round(100 - float(mape), 2)}%",
+        "forecast"   : forecast_data
+    }
+
+
 def run_arima_forecast(
-    db      : Session,
-    file_ids: Union[int, List[int]],
+    db,
+    file_ids: Union[int, List[int]] = None,
     steps   : int = 6
-) -> ForecastResult:
+):
     """
     Full ARIMA pipeline with improved accuracy.
     Uses mean aggregation and wider parameter search.
     """
+    if isinstance(db, pd.DataFrame):
+        return run_arima_forecast_df(db, steps)
+
     if isinstance(file_ids, int):
         file_ids = [file_ids]
 
