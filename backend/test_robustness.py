@@ -14,6 +14,8 @@ from app.models.processed_dataset import ProcessedDataset
 from app.models.forecast_result import ForecastResult
 from app.models.segment_result import SegmentResult
 from app.models.ai_insight import AiInsight
+from app.models.organizations import Organization
+from app.models.subscriptions import Subscription
 
 from app.routes.upload import run_background_ingestion
 from app.services.forecasting import run_arima_forecast

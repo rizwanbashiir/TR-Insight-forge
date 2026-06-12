@@ -1,0 +1,27 @@
+.trusted-by {
+  padding-top: 3rem;
+  padding-bottom: 3rem;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  text-align: center;
+}
+
+.trusted-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 2rem;
+}
+
+.trusted-logos {
+  opacity: 0.6;
+}
+
+.logo-placeholder {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
