@@ -372,3 +372,51 @@ def run_segmentation_pipeline(
     db.commit()
     db.refresh(result)
     return result
+
+
+def run_customer_segmentation(df: pd.DataFrame) -> dict:
+    """
+    Runs customer segmentation on a DataFrame and returns a dictionary
+    with silhouette score, segment details, and individual RFM scores.
+    """
+    # 1. Normalize
+    df_copy = df.copy()
+    df_copy.columns = [c.strip().lower().replace(" ", "_") for c in df_copy.columns]
+
+    # 2. Detect columns
+    cols = detect_columns(df_copy)
+
+    # 3. RFM
+    rfm = compute_rfm(df_copy, cols)
+
+    if len(rfm) == 0:
+        raise ValueError("No customer data found for segmentation.")
+
+    # 4. Cluster
+    if len(rfm) < 4:
+        rfm_clustered, sil_score = run_fallback_segmentation(rfm)
+    else:
+        rfm_clustered, sil_score = run_kmeans(rfm)
+
+    # 5. Label
+    segments = label_segments(rfm_clustered)
+
+    # 6. Prepare RFM scores
+    customer_col = cols["customer"] or "index"
+    rfm_records  = rfm_clustered.rename(
+        columns={customer_col: "customer_id"}
+        if customer_col in rfm_clustered.columns else {}
+    ).to_dict(orient="records")
+
+    for r in rfm_records:
+        for k, v in r.items():
+            if isinstance(v, (np.integer,)):
+                r[k] = int(v)
+            elif isinstance(v, (np.floating,)):
+                r[k] = round(float(v), 4)
+
+    return {
+        "silhouette_score": sil_score,
+        "segments": segments,
+        "rfm_scores": rfm_records[:500]
+    }
