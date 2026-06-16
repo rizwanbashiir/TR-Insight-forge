@@ -46,3 +46,10 @@ class GoogleLoginRequest(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+
+class SetPasswordRequest(BaseModel):
+    token: str
+    new_password: str

@@ -36,8 +36,8 @@ class Settings(BaseSettings):
     PREDEFINED_ADMIN_EMAILS: str = "admin@example.com,admin@insightforge.com"
 
     # Grok Settings
-    GROK_API_KEY: str = ""
-    GROK_API_URL: str = "https://api.groq.com/openai/v1/chat/completions"
+    GROK_API_KEY: str = "xai-FSUFeWOTsq0QT2rmU2cyRImKHAiTFa5nXjYdOaUVDmRB4aMGevsSVWqJA1sPSW4fUXVo5wzddCzyaq60"
+    GROK_API_URL: str = "https://api.x.ai/v1/chat/completions"
 
     class Config:
         env_file = env_file_path

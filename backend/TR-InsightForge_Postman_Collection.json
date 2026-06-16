@@ -1,0 +1,284 @@
+{
+	"info": {
+		"name": "TR-InsightForge Backend End-to-End",
+		"description": "Comprehensive Postman collection covering all features of the TR-InsightForge backend: Auth, Uploads, Analytics, AI, Organizations, and Super Admin.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Authentication",
+			"item": [
+				{
+					"name": "Register",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane@example.com\",\n  \"password\": \"StrongPassword123!\",\n  \"role\": \"admin\"\n}"
+						},
+						"url": {"raw": "{{base_url}}/auth/register", "host": ["{{base_url}}"], "path": ["auth", "register"]}
+					}
+				},
+				{
+					"name": "Verify Email",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"jane@example.com\",\n  \"code\": \"123456\"\n}"
+						},
+						"url": {"raw": "{{base_url}}/auth/verify", "host": ["{{base_url}}"], "path": ["auth", "verify"]}
+					}
+				},
+				{
+					"name": "Login (Regular User)",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"jane@example.com\",\n  \"password\": \"StrongPassword123!\"\n}"
+						},
+						"url": {"raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"]}
+					}
+				},
+				{
+					"name": "Forgot Password",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"jane@example.com\"\n}"
+						},
+						"url": {"raw": "{{base_url}}/auth/forgot-password", "host": ["{{base_url}}"], "path": ["auth", "forgot-password"]}
+					}
+				},
+				{
+					"name": "Set New Password",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"token\": \"PASTE_RESET_TOKEN_HERE\",\n  \"new_password\": \"NewStrongPassword123!\"\n}"
+						},
+						"url": {"raw": "{{base_url}}/auth/set-password", "host": ["{{base_url}}"], "path": ["auth", "set-password"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Super Admin",
+			"item": [
+				{
+					"name": "Login (Super Admin)",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"AdminPassword123!\"\n}"
+						},
+						"url": {"raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"]}
+					}
+				},
+				{
+					"name": "Super Admin Dashboard",
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+						"url": {"raw": "{{base_url}}/superadmin/dashboard", "host": ["{{base_url}}"], "path": ["superadmin", "dashboard"]}
+					}
+				},
+				{
+					"name": "Create Enterprise Organization",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "Authorization", "value": "Bearer {{token}}"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Stark Industries\",\n  \"admin_name\": \"Tony Stark\",\n  \"admin_email\": \"tony@stark.com\",\n  \"stripe_customer_id\": \"cus_stark123\"\n}"
+						},
+						"url": {"raw": "{{base_url}}/superadmin/organizations", "host": ["{{base_url}}"], "path": ["superadmin", "organizations"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Data Ingestion & Preprocessing",
+			"item": [
+				{
+					"name": "Upload Data File",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{"key": "file", "type": "file", "src": []},
+								{"key": "file_type", "value": "sales", "type": "text"}
+							]
+						},
+						"url": {"raw": "{{base_url}}/upload/", "host": ["{{base_url}}"], "path": ["upload", ""]}
+					}
+				},
+				{
+					"name": "Get File Status",
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+						"url": {"raw": "{{base_url}}/upload/1", "host": ["{{base_url}}"], "path": ["upload", "1"]}
+					}
+				},
+				{
+					"name": "Manual Preprocess",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+						"url": {"raw": "{{base_url}}/upload/preprocess/1", "host": ["{{base_url}}"], "path": ["upload", "preprocess", "1"]}
+					}
+				},
+				{
+					"name": "List My Files",
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+						"url": {"raw": "{{base_url}}/upload/", "host": ["{{base_url}}"], "path": ["upload", ""]}
+					}
+				},
+				{
+					"name": "Complete File Details",
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+						"url": {"raw": "{{base_url}}/upload/details/1", "host": ["{{base_url}}"], "path": ["upload", "details", "1"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Analytics (ML Models)",
+			"item": [
+				{
+					"name": "Run Forecasting (ARIMA)",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+						"url": {"raw": "{{base_url}}/forecast/1", "host": ["{{base_url}}"], "path": ["forecast", "1"]}
+					}
+				},
+				{
+					"name": "Run Customer Segmentation",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+						"url": {"raw": "{{base_url}}/segment/1", "host": ["{{base_url}}"], "path": ["segment", "1"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "5. AI & Insights",
+			"item": [
+				{
+					"name": "Check Ollama Health",
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+						"url": {"raw": "{{base_url}}/ai/health", "host": ["{{base_url}}"], "path": ["ai", "health"]}
+					}
+				},
+				{
+					"name": "Generate Full AI Insights",
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+						"url": {"raw": "{{base_url}}/ai/insights?file_id=1", "host": ["{{base_url}}"], "path": ["ai", "insights"], "query": [{"key": "file_id", "value": "1"}]}
+					}
+				},
+				{
+					"name": "Ask Question (Chat)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "Authorization", "value": "Bearer {{token}}"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"file_ids\": [1],\n  \"question\": \"What are the key trends in this sales data?\"\n}"
+						},
+						"url": {"raw": "{{base_url}}/ai/ask", "host": ["{{base_url}}"], "path": ["ai", "ask"]}
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Billing & Organizations",
+			"item": [
+				{
+					"name": "Upgrade to Pro",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "Authorization", "value": "Bearer {{token}}"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"plan_tier\": \"pro\"\n}"
+						},
+						"url": {"raw": "{{base_url}}/billing/test-upgrade", "host": ["{{base_url}}"], "path": ["billing", "test-upgrade"]}
+					}
+				},
+				{
+					"name": "Add User to Organization",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "Authorization", "value": "Bearer {{token}}"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Data Analyst Bob\",\n  \"email\": \"bob@example.com\",\n  \"role\": \"analyst\"\n}"
+						},
+						"url": {"raw": "{{base_url}}/organizations/users", "host": ["{{base_url}}"], "path": ["organizations", "users"]}
+					}
+				},
+				{
+					"name": "List Organization Users",
+					"request": {
+						"method": "GET",
+						"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+						"url": {"raw": "{{base_url}}/organizations/users", "host": ["{{base_url}}"], "path": ["organizations", "users"]}
+					}
+				},
+				{
+					"name": "Resend User Invite",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+						"url": {"raw": "{{base_url}}/organizations/users/2/resend-invite", "host": ["{{base_url}}"], "path": ["organizations", "users", "2", "resend-invite"]}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000"
+		},
+		{
+			"key": "token",
+			"value": "PASTE_YOUR_ACCESS_TOKEN_HERE"
+		}
+	]
+}

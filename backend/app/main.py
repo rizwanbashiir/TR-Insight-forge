@@ -61,9 +61,9 @@ import app.models.subscriptions
 
 from app.routes import ai
 from app.routes import upload
-from app.services.ollama_service import check_ollama_health
+
 from app.config.settings import settings
-from app.routes import auth_routes, upload, ai, forcast, segments, billing
+from app.routes import auth_routes, upload, ai, forcast, segments, billing, organizations, superadmin
 
 
 from sqlalchemy import text
@@ -71,9 +71,17 @@ from sqlalchemy import text
 # Run raw SQL migrations to ensure users table has verification columns and organization relations
 try:
     with engine.connect() as connection:
+        # Add super_admin to enum if not exists (Postgres specific)
+        connection.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'super_admin'"))
+        
         connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_code VARCHAR(6)"))
         connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_expires TIMESTAMP WITH TIME ZONE"))
         connection.execute(text("ALTER TABLE users ALTER COLUMN is_active SET DEFAULT FALSE"))
+        
+        # New columns for password reset
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed BOOLEAN DEFAULT FALSE"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_token VARCHAR(255) UNIQUE"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_expires TIMESTAMP WITH TIME ZONE"))
         
         # Organizations & Subscriptions tables creation
         connection.execute(text("""
@@ -133,13 +141,18 @@ def migrate_existing_data():
                     name="System Admin",
                     email=admin_email,
                     password=hash_password("AdminPassword123!"),
-                    role="admin",
+                    role="super_admin",
                     is_active=True,
+                    password_changed=False,
                     organization_id=org.id
                 )
                 db.add(admin_user)
                 db.commit()
-                print(f"Predefined admin created. Email: {admin_email}, Default Password: AdminPassword123!")
+                print(f"Predefined super_admin created. Email: {admin_email}, Default Password: AdminPassword123!")
+            else:
+                if existing_admin.role != "super_admin":
+                    existing_admin.role = "super_admin"
+                    db.commit()
 
         # 2. Existing Users migration
         users = db.query(User).filter(User.organization_id == None).all()
@@ -190,6 +203,8 @@ app.include_router(ai.router, prefix="/ai", tags=["AI"])
 app.include_router(forcast.router, prefix="/forecast", tags=["Forecast"])
 app.include_router(segments.router, prefix="/segment", tags=["Segmentation"])
 app.include_router(billing.router, prefix="/billing", tags=["Billing"])
+app.include_router(organizations.router, prefix="/organizations", tags=["Organizations"])
+app.include_router(superadmin.router, prefix="/superadmin", tags=["SuperAdmin"])
 
 @app.get("/")
 def root():

@@ -4,11 +4,13 @@ from sqlalchemy.orm import Session
 from app.config.database import get_db
 from app.schemas.auth import (
     RegisterRequest, LoginRequest, TokenResponse, UserResponse,
-    VerifyRequest, GoogleLoginRequest, RefreshTokenRequest
+    VerifyRequest, GoogleLoginRequest, RefreshTokenRequest,
+    SetPasswordRequest, ResetPasswordRequest
 )
 from app.services.auth_services import (
     register_user, login_user, verify_email_code, register_or_login_google,
-    create_access_token, create_refresh_token, refresh_access_token
+    create_access_token, create_refresh_token, refresh_access_token,
+    set_new_password, send_forgot_password_link
 )
 
 router = APIRouter()
@@ -54,3 +56,11 @@ def refresh_token(data: RefreshTokenRequest, db: Session = Depends(get_db)):
         "token_type":   "bearer",
         "user":         result["user"]
     }
+
+@router.post("/set-password")
+def set_password(data: SetPasswordRequest, db: Session = Depends(get_db)):
+    return set_new_password(db, data.token, data.new_password)
+
+@router.post("/forgot-password")
+def forgot_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
+    return send_forgot_password_link(db, data.email)
