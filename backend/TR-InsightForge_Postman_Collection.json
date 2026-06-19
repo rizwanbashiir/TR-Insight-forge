@@ -187,7 +187,7 @@
 			"name": "5. AI & Insights",
 			"item": [
 				{
-					"name": "Check Ollama Health",
+					"name": "Check Grok Health",
 					"request": {
 						"method": "GET",
 						"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],

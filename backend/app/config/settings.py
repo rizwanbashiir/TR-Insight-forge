@@ -12,21 +12,17 @@ for parent in Path(__file__).resolve().parents:
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = "postgresql://postgres:yourpassword@localhost:5432/analytics_db"
+    DATABASE_URL: str = "postgresql://postgres@localhost:5432/analytics_db"
     
     # JWT
-    SECRET_KEY: str = "your-super-secret-key-change-this-in-production"
+    SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
     #pinecone
-    PINECONE_API_KEY:str= "pcsk_4EtQAk_UDX8darV4qXEVigw2gAsQE8ibNMGZ98hpmzevz8TvmNoNhH1H9yk68sTvGqf6CR"
-    PINECONE_INDEX_NAME:str = "trinsightforge"
-
-    # Ollama
-    OLLAMA_BASE_URL : str = "http://localhost:11434"
-    OLLAMA_MODEL    : str = "llama3.2"
+    PINECONE_API_KEY: str = ""
+    PINECONE_INDEX_NAME: str = "trinsightforge"
 
     # Google OAuth
     GOOGLE_CLIENT_ID: str = ""
@@ -36,7 +32,7 @@ class Settings(BaseSettings):
     PREDEFINED_ADMIN_EMAILS: str = "admin@example.com,admin@insightforge.com"
 
     # Grok Settings
-    GROK_API_KEY: str = "xai-FSUFeWOTsq0QT2rmU2cyRImKHAiTFa5nXjYdOaUVDmRB4aMGevsSVWqJA1sPSW4fUXVo5wzddCzyaq60"
+    GROK_API_KEY: str = ""
     GROK_API_URL: str = "https://api.x.ai/v1/chat/completions"
 
     class Config:

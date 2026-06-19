@@ -47,8 +47,8 @@ class MockPineconeIndex:
 def mock_get_pinecone_index():
     return MockPineconeIndex()
 
-def mock_call_ollama(prompt: str, max_tokens: int = 1000) -> str:
-    return "Mocked Ollama AI response: The business shows strong growth in sales and consistent customer segment distributions across the merged datasets."
+def mock_call_grok(prompt: str, max_tokens: int = 1000) -> str:
+    return "Mocked Grok AI response: The business shows strong growth in sales and consistent customer segment distributions across the merged datasets."
 
 # Helper to mock requests.get for Google Login
 real_requests_get = requests.get
@@ -76,7 +76,7 @@ def mock_requests_get(url, *args, **kwargs):
     return MockResponse({}, 404)
 
 @patch("app.services.pinecone_service.get_pinecone_index", mock_get_pinecone_index)
-@patch("app.services.ai_service.call_ollama", mock_call_ollama)
+@patch("app.services.ai_service.call_grok", mock_call_grok)
 @patch("requests.get", mock_requests_get)
 def run_tests():
     # Start the local uvicorn server on port 8001
@@ -199,8 +199,14 @@ def run_tests():
             headers=analyst_headers
         )
         assert res.status_code == 201, f"Upload {i} failed: {res.text}"
-        file_id = res.json()[0]["file_id"]
+        file_id = res.json()["file_id"]
         file_ids.append(file_id)
+        # Wait for background task to finish processing
+        for _ in range(40):
+            status_res = requests.get(f"{base_url}/upload/{file_id}", headers=analyst_headers)
+            if status_res.status_code == 200 and status_res.json().get("status") in ["processed", "failed"]:
+                break
+            time.sleep(0.2)
         # Manually preprocess
         requests.post(f"{base_url}/upload/preprocess/{file_id}", headers=analyst_headers)
         requests.post(f"{base_url}/upload/embed/{file_id}", headers=analyst_headers)
@@ -256,8 +262,14 @@ def run_tests():
         headers=analyst_headers
     )
     assert upload_4th_success.status_code == 201, f"Expected 201 on Pro tier, got {upload_4th_success.status_code}"
-    file_id_4 = upload_4th_success.json()[0]["file_id"]
+    file_id_4 = upload_4th_success.json()["file_id"]
     file_ids.append(file_id_4)
+    # Wait for background task to finish processing
+    for _ in range(40):
+        status_res = requests.get(f"{base_url}/upload/{file_id_4}", headers=analyst_headers)
+        if status_res.status_code == 200 and status_res.json().get("status") in ["processed", "failed"]:
+            break
+        time.sleep(0.2)
     # Preprocess 4th file
     requests.post(f"{base_url}/upload/preprocess/{file_id_4}", headers=analyst_headers)
     requests.post(f"{base_url}/upload/embed/{file_id_4}", headers=analyst_headers)
