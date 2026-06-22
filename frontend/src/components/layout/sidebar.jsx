@@ -1,85 +1,100 @@
-import { Link, useLocation } from "react-router-dom";
+import React from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
+import {
+  LayoutDashboard,
+  Upload,
+  TrendingUp,
+  Users,
+  MessageSquare,
+  CreditCard,
+  LogOut,
+  ChevronDown,
+  Building2,
+} from 'lucide-react'
+import { useData } from '../../context/DataContext'
 
 const navItems = [
-  { label: "Dashboard", icon: "dashboard", href: "/dashboard" },
-  { label: "Upload", icon: "cloud_upload", href: "/upload" },
-  { label: "Analytics", icon: "monitoring", href: "/insights" },
-  { label: "Forecast", icon: "trending_up", href: "/forecast" },
-  { label: "Segmentation", icon: "pie_chart", href: "/segmentation" },
-  { label: "Reports", icon: "description", href: "/insights" },
-  { label: "Team", icon: "group", href: "#" },
-];
+  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/uploads', label: 'Uploads', icon: Upload },
+  { path: '/forecasting', label: 'Forecasting', icon: TrendingUp },
+  { path: '/segments', label: 'Customer Segments', icon: Users },
+  { path: '/ai-chat', label: 'AI Chat', icon: MessageSquare },
+  { path: '/team-billing', label: 'Team & Billing', icon: CreditCard },
+]
 
-const bottomItems = [
-  { label: "Support", icon: "support_agent", href: "#" },
-  { label: "Feedback", icon: "rate_review", href: "#" },
-];
+const Sidebar = () => {
+  const location = useLocation()
+  const { state, dispatch } = useData()
 
-export default function Sidebar() {
-  const location = useLocation();
-
-  const isActive = (href) =>
-    href !== "#" && location.pathname === href;
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    dispatch({ type: 'LOGOUT' })
+    window.location.href = '/signin'
+  }
 
   return (
-    <aside className="hidden md:flex flex-col h-full py-md px-sm bg-surface border-r border-outline-variant w-64 fixed left-0 top-16 bottom-0 overflow-y-auto">
-      {/* Main nav */}
-      <div className="flex flex-col gap-xs mb-lg flex-1">
-        {navItems.map((item) => (
-          <Link
-            key={item.href + item.label}
-            to={item.href}
-            className={
-              isActive(item.href)
-                ? "bg-secondary-container text-on-secondary-container flex items-center gap-sm px-sm py-2 rounded-lg font-bold scale-95 transition-transform"
-                : "text-on-surface-variant hover:bg-surface-container-high flex items-center gap-sm px-sm py-2 rounded-lg transition-all"
-            }
-          >
-            <span
-              className="material-symbols-outlined text-[20px]"
-              style={
-                isActive(item.href)
-                  ? { fontVariationSettings: "'FILL' 1" }
-                  : {}
-              }
-            >
-              {item.icon}
-            </span>
-            <span className="font-label-md text-label-md">{item.label}</span>
-          </Link>
-        ))}
+    <aside className="w-64 h-screen bg-sidebar-bg border-r border-slate-200 flex flex-col fixed left-0 top-0 z-40">
+      {/* Workspace Selector */}
+      <div className="p-4 border-b border-slate-200">
+        <div className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors">
+          <div className="w-8 h-8 rounded-lg bg-primary-600 text-white flex items-center justify-center">
+            <Building2 className="w-4 h-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-slate-900 truncate">
+              {state.currentWorkspace?.name || 'Acme Inc.'}
+            </p>
+            <p className="text-xs text-slate-500">
+              {state.currentWorkspace?.plan || 'Growth'} · {state.currentWorkspace?.seats || '12'} seats
+            </p>
+          </div>
+          <ChevronDown className="w-4 h-4 text-slate-400" />
+        </div>
       </div>
 
-      {/* Bottom section */}
-      <div className="mt-auto flex flex-col gap-xs pt-md border-t border-outline-variant">
-        <Link
-          to="/upload"
-          className="bg-primary text-on-primary font-bold py-2 rounded-xl shadow-lg hover:opacity-90 transition-all mb-md text-center text-sm"
-        >
-          New Analysis
-        </Link>
-        {bottomItems.map((item) => (
-          <a
-            key={item.label}
-            href={item.href}
-            className="text-on-surface-variant hover:bg-surface-container-high flex items-center gap-sm px-sm py-2 rounded-lg transition-all"
-          >
-            <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
-            <span className="font-label-md text-label-md">{item.label}</span>
-          </a>
-        ))}
+      {/* Navigation */}
+      <nav className="flex-1 p-3 space-y-1">
+        {navItems.map((item) => {
+          const Icon = item.icon
+          const isActive = location.pathname === item.path
+          return (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={isActive ? 'nav-link-active' : 'nav-link'}
+            >
+              <Icon className="w-5 h-5" />
+              <span>{item.label}</span>
+            </NavLink>
+          )
+        })}
+      </nav>
 
-        {/* User profile pill */}
-        <div className="flex items-center gap-sm mt-sm px-sm py-2">
-          <div className="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center text-primary font-bold text-sm shrink-0">
-            A
+      {/* User Profile */}
+      <div className="p-4 border-t border-slate-200">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-primary-600 text-white flex items-center justify-center text-sm font-semibold">
+            {state.user?.initials || 'AL'}
           </div>
-          <div className="overflow-hidden">
-            <p className="font-label-md text-label-md text-on-surface truncate leading-tight">Alex Chen</p>
-            <p className="text-[10px] text-on-surface-variant uppercase tracking-tight">Pro Analyst</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-slate-900">
+              {state.user?.name || 'Ada Lovelace'}
+            </p>
+            <p className="text-xs text-success-600 font-medium">
+              {state.user?.role || 'Admin'}
+            </p>
           </div>
+          <button
+            onClick={handleLogout}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            title="Sign out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </aside>
-  );
+  )
 }
+
+export default Sidebar

@@ -1,0 +1,15 @@
+// AppReducer logic is included in DataContext.jsx
+// This file can be used for additional reducer utilities if needed
+
+export const actionTypes = {
+  SET_USER: 'SET_USER',
+  LOGOUT: 'LOGOUT',
+  SET_DATASETS: 'SET_DATASETS',
+  ADD_DATASET: 'ADD_DATASET',
+  SELECT_DATASETS: 'SELECT_DATASETS',
+  SET_DASHBOARD_DATA: 'SET_DASHBOARD_DATA',
+  SET_FORECAST_DATA: 'SET_FORECAST_DATA',
+  SET_SEGMENTATION_DATA: 'SET_SEGMENTATION_DATA',
+  SET_INSIGHTS_DATA: 'SET_INSIGHTS_DATA',
+  SET_WORKSPACE: 'SET_WORKSPACE',
+}
