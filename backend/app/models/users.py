@@ -5,6 +5,7 @@ import enum
 from app.config.database import Base
 
 class UserRole(str, enum.Enum):
+    super_admin = "super_admin"
     admin   = "admin"
     analyst = "analyst"
     viewer  = "viewer"
@@ -21,6 +22,9 @@ class User(Base):
     is_active  = Column(Boolean, default=False)
     verification_code = Column(String(6), nullable=True)
     verification_expires = Column(DateTime(timezone=True), nullable=True)
+    password_changed = Column(Boolean, default=False)
+    reset_password_token = Column(String(255), nullable=True, unique=True, index=True)
+    reset_password_expires = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     organization = relationship("Organization", back_populates="users")

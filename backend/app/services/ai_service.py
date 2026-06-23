@@ -6,7 +6,7 @@ from app.models.uploaded_file import UploadedFile
 from app.services.pinecone_service import search_similar_chunks
 from app.services.prompt_builder import build_rag_prompt
 from app.services.prompt_builder import build_general_insights_prompt
-from app.services.ollama_service import call_ollama
+from app.services.grok_service import call_grok
 
 
 from typing import Union, List
@@ -89,7 +89,7 @@ def get_ai_answer(
     Full RAG pipeline:
     1. Search Pinecone for relevant chunks
     2. Build prompt with retrieved context
-    3. Call Ollama
+    3. Call Grok API
     4. Save result to ai_insights table
     5. Return answer
     """
@@ -135,8 +135,8 @@ def get_ai_answer(
         chunks = []
         prompt = build_general_insights_prompt(kpi_summary)
 
-    # Call Ollama
-    ai_response = call_ollama(prompt)
+    # Call Grok API
+    ai_response = call_grok(prompt)
 
     # Save to ai_insights table under primary_file_id
     existing = db.query(AiInsight).filter(
@@ -146,11 +146,11 @@ def get_ai_answer(
     if existing:
         existing.prompt_used  = prompt
         existing.ai_response  = ai_response
-        existing.model_name   = "llama 3.2"
+        existing.model_name   = "grok-beta"
     else:
         insight = AiInsight(
             file_id    = primary_file_id,
-            model_name = "llama 3.2",
+            model_name = "grok-beta",
             prompt_used= prompt,
             ai_response= ai_response,
         )
@@ -163,5 +163,5 @@ def get_ai_answer(
         "question"       : user_question or "General business analysis",
         "chunks_used"    : len(chunks),
         "ai_response"    : ai_response,
-        "model"          : "llama 3.2",
+        "model"          : "grok-beta",
     }

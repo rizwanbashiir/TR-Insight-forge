@@ -139,6 +139,46 @@ def verify_email_code(db: Session, email: str, code: str) -> User:
     db.refresh(user)
     return user
 
+def set_new_password(db: Session, token: str, new_password: str):
+    user = db.query(User).filter(User.reset_password_token == token).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid reset token")
+        
+    expires = user.reset_password_expires
+    if expires and expires.tzinfo is not None:
+        expires = expires.replace(tzinfo=None)
+        
+    if expires and datetime.utcnow() > expires:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Reset token expired")
+        
+    user.password = hash_password(new_password)
+    user.password_changed = True
+    user.reset_password_token = None
+    user.reset_password_expires = None
+    db.commit()
+    return {"message": "Password updated successfully."}
+
+def send_forgot_password_link(db: Session, email: str):
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        # Don't leak if user exists
+        return {"message": "If an account exists with this email, a reset link has been sent."}
+        
+    from app.services.org_services import generate_reset_token
+    token = generate_reset_token()
+    user.reset_password_token = token
+    user.reset_password_expires = datetime.utcnow() + timedelta(hours=6)
+    db.commit()
+    
+    print("\n" + "="*50)
+    print(f"PASSWORD RESET EMAIL SENT TO: {email}")
+    print(f"Please use this reset link:")
+    print(f"http://localhost:5173/reset-password?token={token}")
+    print(f"(Link valid for 6 hours)")
+    print("="*50 + "\n")
+    
+    return {"message": "If an account exists with this email, a reset link has been sent."}
+
 def login_user(db: Session, data: LoginRequest) -> dict:
     user = db.query(User).filter(User.email == data.email).first()
     if not user or not verify_password(data.password, user.password):

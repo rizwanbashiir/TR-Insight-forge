@@ -135,10 +135,10 @@ def get_ai_insights(
 
 
 @router.get("/health", status_code=200)
-def ollama_health():
-    """Check if Ollama is running."""
-    from app.services.ollama_service import check_ollama_health
-    return check_ollama_health()
+def ai_health():
+    """Check if Grok API is reachable."""
+    from app.services.grok_service import check_grok_health
+    return check_grok_health()
 
 
 @router.get("/history/{file_id}", status_code=200)

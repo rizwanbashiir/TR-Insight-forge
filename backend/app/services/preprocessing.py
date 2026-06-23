@@ -105,51 +105,66 @@ def clean_data(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
 
 # ── Step 3: Compute KPIs ─────────────────────────────────────────────
 def compute_kpis(df: pd.DataFrame, file_type: str) -> dict:
-    """
-    Compute KPIs based on what columns are available.
-    Uses smart fuzzy matching so any column containing
-    'sales', 'revenue', 'amount' etc. gets detected.
-    """
+    import re
+
     kpis = {}
 
-    # ── Smart column finder ──────────────────────────────────────────
     def find_col(df, keywords):
-        """
-        Find a column whose name contains any of the keywords.
-        Checks exact match first, then partial match.
-        """
         cols = df.columns.tolist()
-
-        # Exact match first
         for kw in keywords:
             if kw in cols:
                 return kw
-
-        # Partial match — e.g. "weekly_sales" contains "sales"
         for kw in keywords:
             for col in cols:
                 if kw in col.lower():
                     return col
-
         return None
 
-    # ── Amount / revenue column ──
+    def clean_numeric_series(series):
+        """
+        Safely convert any series to numeric.
+        Handles: ₹1,299 | $500 | ₹1,099₹349 (takes first value only)
+        """
+        def clean_val(val):
+            if pd.isna(val):
+                return 0.0
+            s = str(val).strip()
+            # Multiple ₹ signs — take only first price
+            if s.count("₹") > 1:
+                parts = [p for p in s.split("₹") if p.strip()]
+                s = parts[0] if parts else "0"
+            # Strip all currency symbols
+            s = re.sub(r"[₹$£€,\s]", "", s)
+            # Extract first valid number
+            match = re.search(r"[\d.]+", s)
+            if match:
+                try:
+                    return float(match.group())
+                except Exception:
+                    return 0.0
+            return 0.0
+
+        return series.apply(clean_val)
+
+    # ── Amount column ──
     amount_col = find_col(df, [
         "revenue", "sales", "amount", "income",
         "expense", "cost", "total", "price", "value"
     ])
 
     if amount_col:
-        kpis["total_amount"]       = round(float(df[amount_col].sum()), 2)
-        kpis["average_amount"]     = round(float(df[amount_col].mean()), 2)
-        kpis["max_amount"]         = round(float(df[amount_col].max()), 2)
-        kpis["min_amount"]         = round(float(df[amount_col].min()), 2)
+        clean_amt = clean_numeric_series(df[amount_col])
+        kpis["total_amount"]       = round(float(clean_amt.sum()), 2)
+        kpis["average_amount"]     = round(float(clean_amt.mean()), 2)
+        kpis["max_amount"]         = round(float(clean_amt.max()), 2)
+        kpis["min_amount"]         = round(float(clean_amt.min()), 2)
         kpis["amount_column_used"] = amount_col
 
     # ── Profit column ──
     profit_col = find_col(df, ["profit", "margin", "net", "gross"])
     if profit_col and profit_col != amount_col:
-        kpis["total_profit"]      = round(float(df[profit_col].sum()), 2)
+        clean_profit = clean_numeric_series(df[profit_col])
+        kpis["total_profit"]       = round(float(clean_profit.sum()), 2)
         kpis["profit_column_used"] = profit_col
 
     # ── Order count ──
@@ -162,16 +177,13 @@ def compute_kpis(df: pd.DataFrame, file_type: str) -> dict:
     if customer_col:
         kpis["unique_customers"] = int(df[customer_col].nunique())
 
-    # ── Store / branch count ──
+    # ── Store count ──
     store_col = find_col(df, ["store", "branch", "location", "region", "shop"])
     if store_col:
         kpis["unique_stores"] = int(df[store_col].nunique())
 
     # ── Top category ──
-    category_col = find_col(df, [
-        "category", "segment", "department",
-        "type", "product", "group"
-    ])
+    category_col = find_col(df, ["category", "segment", "department", "type", "product"])
     if category_col:
         mode_val = df[category_col].mode()
         if not mode_val.empty:
@@ -188,8 +200,10 @@ def compute_kpis(df: pd.DataFrame, file_type: str) -> dict:
     if date_col and amount_col:
         try:
             df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+            temp = df[[date_col, amount_col]].copy()
+            temp[amount_col] = clean_numeric_series(temp[amount_col])
             monthly = (
-                df.groupby(df[date_col].dt.to_period("M"))[amount_col]
+                temp.groupby(temp[date_col].dt.to_period("M"))[amount_col]
                 .sum()
                 .reset_index()
             )
@@ -200,28 +214,29 @@ def compute_kpis(df: pd.DataFrame, file_type: str) -> dict:
         except Exception as e:
             kpis["monthly_trend_error"] = str(e)
 
-    # ── Extra numeric summaries ──
-    # For any numeric column not already captured, add basic stats
+    # ── Additional numeric stats ──
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
-    extra_stats  = {}
     already_used = {amount_col, profit_col, order_col, store_col}
+    extra_stats  = {}
 
     for col in numeric_cols:
         if col not in already_used and col is not None:
-            extra_stats[col] = {
-                "mean" : round(float(df[col].mean()), 4),
-                "min"  : round(float(df[col].min()), 4),
-                "max"  : round(float(df[col].max()), 4),
-            }
+            try:
+                extra_stats[col] = {
+                    "mean": round(float(df[col].mean()), 4),
+                    "min" : round(float(df[col].min()), 4),
+                    "max" : round(float(df[col].max()), 4),
+                }
+            except Exception:
+                pass
 
     if extra_stats:
         kpis["additional_metrics"] = extra_stats
 
     kpis["total_rows"] = len(df)
-    kpis["file_type"]  = file_type
+    kpis["file_type"]  = str(file_type)
 
     return kpis
-
 # ── Step 4: Main pipeline — called from the route ────────────────────
 def run_preprocessing_pipeline(
     db     : Session,
