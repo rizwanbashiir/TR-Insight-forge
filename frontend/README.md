@@ -1,16 +1,82 @@
-# React + Vite
+# TR-InsightForge Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A modern React-based Business Intelligence platform frontend built with Vite, Tailwind CSS, and Recharts.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Landing Page** - Marketing site with hero, features, pricing, and CTA sections
+- **Authentication** - Sign in / Sign up with multi-step workspace creation
+- **Dashboard** - KPI cards, revenue trends, sales distribution, regional performance, AI insights
+- **Uploads** - Drag-and-drop file upload with dataset history
+- **Forecasting** - ARIMA-based revenue forecasting with confidence intervals
+- **Customer Segments** - RFM-based segmentation with cluster visualization
+- **AI Chat** - Natural language data assistant with chat history
+- **Team & Billing** - Workspace management, subscription, and team members
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- React 18 + Vite
+- React Router v6
+- Tailwind CSS
+- Recharts (charts)
+- Lucide React (icons)
+- PapaParse (CSV parsing)
+- SheetJS (Excel parsing)
+- React Dropzone (file upload)
+- Axios (API calls)
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+```
+
+## Project Structure
+
+```
+frontend/
+├── public/
+├── src/
+│   ├── assets/
+│   ├── components/
+│   │   ├── layout/        # Navbar, Sidebar, Footer
+│   │   ├── upload/        # FileDropzone, FilePreview
+│   │   ├── dashboard/     # KPICards, RevenueChart, CategoryChart, RegionChart
+│   │   ├── forecast/      # ForecastChart, ForecastTable
+│   │   ├── segmentation/  # SegmentPyramid, SegmentTable
+│   │   ├── insights/      # AIReport
+│   │   ├── landing/       # Hero, Features, Pricing, CTA, Footer
+│   │   └── auth/          # SignInForm, SignUpForm
+│   ├── pages/
+│   ├── services/          # API services
+│   ├── context/           # DataContext (React Context)
+│   ├── hooks/             # Custom hooks
+│   ├── utils/             # Parser, Formatter, Export
+│   ├── routes/
+│   ├── App.jsx
+│   ├── main.jsx
+│   └── index.css
+├── package.json
+├── tailwind.config.js
+├── vite.config.js
+└── .env
+```
+
+## Environment Variables
+
+```
+VITE_API_BASE_URL=http://localhost:5000/api
+```
+
+## Notes
+
+- The app uses mock data for demo purposes. Connect to your backend API for real data.
+- Authentication is simulated - in production, implement proper JWT token handling.
+- The Ollama AI integration should be connected via the backend API.

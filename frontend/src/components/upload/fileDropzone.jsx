@@ -1,113 +1,46 @@
-import { useRef, useState } from "react";
-import { useData } from "@/context/DataContext";
+import React from 'react'
+import { useDropzone } from 'react-dropzone'
+import { UploadCloud, FileSpreadsheet, FileJson, FileText } from 'lucide-react'
 
-const ACCEPTED_TYPES = {
-  "text/csv": [".csv"],
-  "application/json": [".json"],
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
-  "application/vnd.ms-excel": [".xls"],
-};
-
-export default function FileDropzone({ onFileSelect }) {
-  const inputRef = useRef(null);
-  const [dragging, setDragging] = useState(false);
-  const { dispatch } = useData();
-
-  const handleFiles = (files) => {
-    const file = files[0];
-    if (!file) return;
-    dispatch({ type: "SET_FILE", payload: file });
-    onFileSelect?.(file);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setDragging(false);
-    handleFiles(e.dataTransfer.files);
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setDragging(true);
-  };
-
-  const handleDragLeave = () => setDragging(false);
-
-  const handleInputChange = (e) => {
-    handleFiles(e.target.files);
-  };
+const FileDropzone = ({ onDrop, isLoading }) => {
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'text/csv': ['.csv'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'application/vnd.ms-excel': ['.xls'],
+      'application/json': ['.json'],
+      'text/tab-separated-values': ['.tsv'],
+    },
+    multiple: true,
+  })
 
   return (
     <div
-      onClick={() => inputRef.current?.click()}
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      className={`
-        bento-card rounded-xl border-dashed border-2 cursor-pointer
-        flex flex-col items-center justify-center text-center gap-md
-        p-xl transition-all select-none
-        ${dragging
-          ? "border-primary bg-primary-fixed/30 scale-[1.01]"
-          : "border-primary/30 bg-surface-container-low hover:bg-surface-container"
-        }
-      `}
+      {...getRootProps()}
+      className={`dropzone p-12 text-center transition-all ${
+        isDragActive ? 'dropzone-active' : ''
+      }`}
     >
-      <div
-        className={`
-          w-16 h-16 rounded-full flex items-center justify-center transition-all
-          ${dragging ? "bg-primary scale-110" : "bg-primary-container"}
-        `}
-      >
-        <span
-          className={`material-symbols-outlined text-4xl ${dragging ? "text-on-primary" : "text-on-primary-container"}`}
-        >
-          cloud_upload
-        </span>
-      </div>
-
-      <div>
-        <h2 className="font-headline-md text-headline-md text-on-surface">
-          {dragging ? "Release to upload" : "Drop your file here"}
-        </h2>
-        <p className="font-body-md text-on-surface-variant mt-xs">
-          Supports CSV, JSON, and Excel — or connect directly to your database.
-        </p>
-      </div>
-
-      <div className="flex gap-sm flex-wrap justify-center">
-        {[".CSV", ".XLSX", ".JSON"].map((ext) => (
-          <span
-            key={ext}
-            className="px-sm py-1 rounded bg-surface-container text-outline font-label-sm text-label-sm border border-outline-variant"
-          >
-            {ext}
-          </span>
-        ))}
-      </div>
-
-      <div className="flex gap-sm flex-wrap justify-center">
-        <button
-          className="bg-primary text-on-primary px-lg py-sm rounded-lg font-bold hover:opacity-90 transition-all active:scale-95 shadow-md"
-          onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
-        >
-          Upload File
-        </button>
-        <button
-          className="bg-secondary-container text-on-secondary-container px-lg py-sm rounded-lg font-bold hover:opacity-90 transition-all active:scale-95"
-          onClick={(e) => e.stopPropagation()}
-        >
-          Connect Data Source
+      <input {...getInputProps()} />
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-14 h-14 rounded-2xl bg-primary-600 text-white flex items-center justify-center">
+          <UploadCloud className="w-7 h-7" />
+        </div>
+        <div>
+          <p className="text-base font-semibold text-slate-900">
+            Drop files to upload
+          </p>
+          <p className="text-sm text-slate-500 mt-1">
+            Supports CSV, XLSX, JSON · Up to 500MB per file
+          </p>
+        </div>
+        <button className="btn-primary mt-2" disabled={isLoading}>
+          {isLoading ? 'Processing...' : 'Browse files'}
         </button>
       </div>
-
-      <input
-        ref={inputRef}
-        type="file"
-        className="hidden"
-        accept={Object.keys(ACCEPTED_TYPES).join(",")}
-        onChange={handleInputChange}
-      />
     </div>
-  );
+  )
 }
+
+export default FileDropzone
