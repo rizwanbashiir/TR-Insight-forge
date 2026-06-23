@@ -89,7 +89,7 @@ def get_ai_answer(
     Full RAG pipeline:
     1. Search Pinecone for relevant chunks
     2. Build prompt with retrieved context
-    3. Call Ollama
+    3. Call Grok API
     4. Save result to ai_insights table
     5. Return answer
     """
@@ -135,7 +135,7 @@ def get_ai_answer(
         chunks = []
         prompt = build_general_insights_prompt(kpi_summary)
 
-    # Call Ollama
+    # Call Grok API
     ai_response = call_grok(prompt)
 
     # Save to ai_insights table under primary_file_id

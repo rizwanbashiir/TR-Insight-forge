@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.config.database import get_db, SessionLocal
 from app.schemas.upload import UploadResponse, FileType, FileStatus
 from app.services.upload_service import save_uploaded_file
-from app.utils.dependencies import get_current_user
+from app.utils.dependencies import get_current_user, require_role
 from app.services.preprocessing import run_preprocessing_pipeline
 from app.services.pinecone_service import embed_and_store
 from app.models.uploaded_file import UploadedFile
@@ -37,7 +37,7 @@ async def upload_file(
     file        : UploadFile = File(...),
     file_type   : FileType   = Form(...),
     db          : Session    = Depends(get_db),
-    current_user: User       = Depends(get_current_user),
+    current_user: User       = Depends(require_role("admin", "analyst")),
 ):
     """
     Upload a business data file (CSV, Excel, JSON, TSV).
@@ -55,11 +55,16 @@ async def upload_file(
             detail=f"File too large. Maximum size is 50MB."
         )
 
+    # Enforce file upload quota
+    from app.services.quotas import verify_limits_and_tier
+    verify_limits_and_tier(db, current_user.organization_id, "upload")
+
     uploaded = save_uploaded_file(
         db       = db,
         file     = file,
         file_type= file_type,
         user_id  = current_user.id,
+        organization_id = current_user.organization_id,
     )
 
     # Queue background preprocessing + embedding
@@ -84,7 +89,7 @@ async def upload_file(
 def preprocess_file(
     file_id     : int,
     db          : Session = Depends(get_db),
-    current_user: User    = Depends(get_current_user),
+    current_user: User    = Depends(require_role("admin", "analyst")),
 ):
     """Manually trigger preprocessing for a file."""
     file_record = db.query(UploadedFile).filter(
@@ -117,7 +122,7 @@ def preprocess_file(
 def embed_file(
     file_id     : int,
     db          : Session = Depends(get_db),
-    current_user: User    = Depends(get_current_user),
+    current_user: User    = Depends(require_role("admin", "analyst")),
 ):
     """Embed processed KPI data into Pinecone for RAG."""
     file_record = db.query(UploadedFile).filter(
@@ -144,9 +149,14 @@ def list_my_files(
     current_user: User    = Depends(get_current_user),
 ):
     """List all files uploaded by current user."""
-    files = db.query(UploadedFile).filter(
-        UploadedFile.user_id == current_user.id
-    ).order_by(UploadedFile.uploaded_at.desc()).all()
+    if current_user.organization_id:
+        files = db.query(UploadedFile).filter(
+            UploadedFile.organization_id == current_user.organization_id
+        ).order_by(UploadedFile.uploaded_at.desc()).all()
+    else:
+        files = db.query(UploadedFile).filter(
+            UploadedFile.user_id == current_user.id
+        ).order_by(UploadedFile.uploaded_at.desc()).all()
 
     return [
         {
