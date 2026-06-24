@@ -30,7 +30,7 @@ def call_grok(prompt: str, max_tokens: int = 1000) -> str:
     }
 
     payload = {
-        "model"      : "grok-beta",
+        "model"      : settings.GROK_MODEL,
         "messages"   : [
             {
                 "role"   : "system",
@@ -88,7 +88,7 @@ def check_grok_health() -> dict:
     
     # Send a tiny prompt to verify
     payload = {
-        "model"      : "grok-beta",
+        "model"      : settings.GROK_MODEL,
         "messages"   : [{"role": "user", "content": "ping"}],
         "max_tokens" : 5
     }
@@ -96,6 +96,6 @@ def check_grok_health() -> dict:
     try:
         response = requests.post(api_url, headers=headers, json=payload, timeout=10)
         response.raise_for_status()
-        return {"status": "running", "models": ["grok-beta"]}
+        return {"status": "running", "models": [settings.GROK_MODEL]}
     except Exception as e:
         return {"status": "offline", "message": str(e), "models": []}

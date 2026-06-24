@@ -1,3 +1,4 @@
+####Updated settings.py 
 import os
 from pathlib import Path
 from pydantic_settings import BaseSettings
@@ -33,7 +34,8 @@ class Settings(BaseSettings):
 
     # Grok Settings
     GROK_API_KEY: str = ""
-    GROK_API_URL: str = "https://api.x.ai/v1/chat/completions"
+    GROK_API_URL: str = "https://api.groq.com/openai/v1/chat/completions"
+    GROK_MODEL: str = "llama-3.3-70b-versatile"
 
     class Config:
         env_file = env_file_path
