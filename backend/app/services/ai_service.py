@@ -7,6 +7,7 @@ from app.services.pinecone_service import search_similar_chunks
 from app.services.prompt_builder import build_rag_prompt
 from app.services.prompt_builder import build_general_insights_prompt
 from app.services.grok_service import call_grok
+from app.config.settings import settings
 
 
 from typing import Union, List
@@ -146,11 +147,11 @@ def get_ai_answer(
     if existing:
         existing.prompt_used  = prompt
         existing.ai_response  = ai_response
-        existing.model_name   = "grok-beta"
+        existing.model_name   = settings.GROK_MODEL
     else:
         insight = AiInsight(
             file_id    = primary_file_id,
-            model_name = "grok-beta",
+            model_name = settings.GROK_MODEL,
             prompt_used= prompt,
             ai_response= ai_response,
         )
@@ -163,5 +164,5 @@ def get_ai_answer(
         "question"       : user_question or "General business analysis",
         "chunks_used"    : len(chunks),
         "ai_response"    : ai_response,
-        "model"          : "grok-beta",
+        "model"          : settings.GROK_MODEL,
     }
