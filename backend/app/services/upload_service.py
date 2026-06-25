@@ -8,25 +8,7 @@ from datetime import datetime
 from app.models.uploaded_file import UploadedFile, FileType, FileStatus
 from app.models.raw_data_row import RawDataRow
 
-# ── Column name mappings per file type ──────────────────────────────
-# We try to auto-detect which column is "date" and which is "amount"
-# by checking common column name variations
-
-DATE_ALIASES = [
-    "Date", "order_date", "transaction_date", "invoice_date",
-    "sale_date", "expense_date", "period", "month", "day" , "CPI", "Temperature"
-]
-
-AMOUNT_ALIASES = {
-    "sales"    : ["revenue", "sales", "amount", "total", "sales_amount",
-                  "total_revenue", "price", "net_sales"],
-    "expenses" : ["amount", "expense", "cost", "total", "expense_amount",
-                  "spend", "expenditure"],
-    "income"   : ["amount", "income", "revenue", "total", "income_amount",
-                  "earnings", "gross_income"],
-    "inventory": ["quantity", "qty", "stock", "units", "quantity_on_hand"],
-    "custom"   : ["amount", "value", "total", "revenue", "cost"],
-}
+from app.utils.column_mapping import detect_key_columns
 def parse_uploaded_file(file: UploadFile) -> tuple[pd.DataFrame, str]:
     filename = file.filename.lower()
     contents = file.file.read()
@@ -90,19 +72,7 @@ def parse_uploaded_file(file: UploadFile) -> tuple[pd.DataFrame, str]:
 
 
 # ── Column detectors ─────────────────────────────────────────────────
-def detect_date_column(df: pd.DataFrame):
-    for col in df.columns:
-        if col in DATE_ALIASES:
-            return col
-    return None
-
-
-def detect_amount_column(df: pd.DataFrame, file_type: str):
-    aliases = AMOUNT_ALIASES.get(file_type, AMOUNT_ALIASES["custom"])
-    for col in df.columns:
-        if col in aliases:
-            return col
-    return None
+# Replaced by centralized `detect_key_columns` from app.utils.column_mapping
 
 
 def parse_date_safe(value):
@@ -154,8 +124,9 @@ def save_uploaded_file(
     verify_limits_and_tier(db, organization_id, "row_count", len(df))
 
     # Step 2 — detect key columns
-    date_col_name   = detect_date_column(df)
-    amount_col_name = detect_amount_column(df, file_type)
+    detected = detect_key_columns(df)
+    date_col_name   = detected.get("date")
+    amount_col_name = detected.get("amount")
 
     # Step 3 — create uploaded_files record
     uploaded_file = UploadedFile(

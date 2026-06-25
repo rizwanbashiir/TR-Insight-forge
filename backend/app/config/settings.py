@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     GROK_API_URL: str = "https://api.groq.com/openai/v1/chat/completions"
     GROK_MODEL: str = "llama-3.3-70b-versatile"
 
+    # Resend Email Settings
+    RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "onboarding@resend.dev"
+
     class Config:
         env_file = env_file_path
         extra = "ignore"
