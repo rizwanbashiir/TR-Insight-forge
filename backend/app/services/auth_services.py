@@ -9,6 +9,7 @@ import requests
 from app.config.settings import settings
 from app.models.users import User
 from app.schemas.auth import RegisterRequest, LoginRequest
+from app.services.email_service import send_verification_email, send_password_reset_email
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -50,49 +51,40 @@ def decode_access_token(token: str) -> dict:
 def register_user(db: Session, data: RegisterRequest) -> User:
     existing = db.query(User).filter(User.email == data.email).first()
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
+        if existing.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        else:
+            # Re-registration for unverified user
+            user = existing
+    else:
+        user = User(email=data.email)
+        db.add(user)
     
     # Generate 6-digit verification code
     code = f"{random.randint(100000, 999999)}"
     expires = datetime.utcnow() + timedelta(minutes=10)
-
-    # Auto-create organization and subscription for new user
-    from app.models.organizations import Organization
-    from app.models.subscriptions import Subscription
-
-    org = Organization(name=f"{data.name}'s Workspace")
-    db.add(org)
-    db.flush()  # gets the ID
-
-    sub = Subscription(organization_id=org.id, plan_tier="free", status="active")
-    db.add(sub)
 
     # Forbid admin role on public signup
     assigned_role = data.role
     if assigned_role == "admin":
         assigned_role = "analyst"
 
-    user = User(
-        name=data.name,
-        email=data.email,
-        password=hash_password(data.password),
-        role=assigned_role,
-        is_active=False,
-        verification_code=code,
-        verification_expires=expires,
-        organization_id=org.id
-    )
-    db.add(user)
+    user.name = data.name
+    user.password = hash_password(data.password)
+    user.role = assigned_role
+    user.is_active = False
+    user.verification_code = code
+    user.verification_expires = expires
+    user.organization_id = None # Organization is created upon verification
+
     db.commit()
     db.refresh(user)
 
-    # Print verification code to console for development/test purposes
-    print(f"\n==========================================")
-    print(f"VERIFICATION CODE FOR {user.email}: {code}")
-    print(f"==========================================\n")
+    # Send verification code via email
+    send_verification_email(to_email=user.email, code=code)
 
     return user
 
@@ -124,17 +116,30 @@ def verify_email_code(db: Session, email: str, code: str) -> User:
         user.verification_code = new_code
         user.verification_expires = datetime.utcnow() + timedelta(minutes=10)
         db.commit()
-        print(f"\n==========================================")
-        print(f"NEW VERIFICATION CODE FOR {user.email}: {new_code}")
-        print(f"==========================================\n")
+        send_verification_email(to_email=user.email, code=new_code)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Verification code expired. A new code has been generated and printed to the console."
+            detail="Verification code expired. A new code has been generated and emailed to you."
         )
 
     user.is_active = True
     user.verification_code = None
     user.verification_expires = None
+
+    # Auto-create organization and subscription now that user is verified
+    if not user.organization_id:
+        from app.models.organizations import Organization
+        from app.models.subscriptions import Subscription
+        
+        org = Organization(name=f"{user.name}'s Workspace")
+        db.add(org)
+        db.flush()  # gets the ID
+
+        sub = Subscription(organization_id=org.id, plan_tier="free", status="active")
+        db.add(sub)
+        
+        user.organization_id = org.id
+
     db.commit()
     db.refresh(user)
     return user
@@ -170,12 +175,8 @@ def send_forgot_password_link(db: Session, email: str):
     user.reset_password_expires = datetime.utcnow() + timedelta(hours=6)
     db.commit()
     
-    print("\n" + "="*50)
-    print(f"PASSWORD RESET EMAIL SENT TO: {email}")
-    print(f"Please use this reset link:")
-    print(f"http://localhost:5173/reset-password?token={token}")
-    print(f"(Link valid for 6 hours)")
-    print("="*50 + "\n")
+    reset_link = f"http://localhost:5173/reset-password?token={token}"
+    send_password_reset_email(to_email=email, reset_link=reset_link)
     
     return {"message": "If an account exists with this email, a reset link has been sent."}
 

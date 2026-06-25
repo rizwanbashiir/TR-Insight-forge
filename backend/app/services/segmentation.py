@@ -10,6 +10,7 @@ warnings.filterwarnings("ignore")
 from app.models.raw_data_row import RawDataRow
 from app.models.segment_result import SegmentResult
 from app.models.uploaded_file import UploadedFile
+from app.utils.column_mapping import detect_key_columns
 
 
 from typing import Union, List
@@ -40,48 +41,7 @@ def load_data_for_segmentation(
 
 
 # ── Step 2: Detect required columns ──────────────────────────────────
-def detect_columns(df: pd.DataFrame) -> dict:
-    """
-    Auto-detect customer, date, and amount columns.
-    Returns dict with detected column names.
-    """
-    customer_candidates = [
-        "customer_id", "client_id", "user_id",
-        "customer", "client", "buyer_id"
-    ]
-    date_candidates = [
-        "date", "order_date", "transaction_date",
-        "invoice_date", "sale_date", "purchase_date"
-    ]
-    amount_candidates = [
-        "revenue", "total_sales", "sales", "amount",
-        "weekly_sales", "total", "price", "monetary",
-        "income", "spend"
-    ]
-    order_candidates = [
-        "order_id", "invoice_id", "transaction_id",
-        "order_no", "receipt_id", "id"
-    ]
-
-    def find_col(candidates):
-        # Exact match first
-        for c in candidates:
-            if c in df.columns:
-                return c
-        # Partial match
-        for c in candidates:
-            for col in df.columns:
-                if c in col.lower():
-                    return col
-        return None
-
-    return {
-        "customer": find_col(customer_candidates),
-        "date"    : find_col(date_candidates),
-        "amount"  : find_col(amount_candidates),
-        "order"   : find_col(order_candidates),
-    }
-
+# Using centralized detect_key_columns from app.utils.column_mapping
 
 # ── Step 3: Compute RFM scores ────────────────────────────────────────
 def compute_rfm(df: pd.DataFrame, cols: dict) -> pd.DataFrame:
@@ -313,7 +273,7 @@ def run_segmentation_pipeline(
     df = load_data_for_segmentation(db, file_ids)
 
     # 2. Detect columns
-    cols = detect_columns(df)
+    cols = detect_key_columns(df)
     print(f"Detected columns: {cols}")
 
     # 3. RFM
@@ -384,7 +344,7 @@ def run_customer_segmentation(df: pd.DataFrame) -> dict:
     df_copy.columns = [c.strip().lower().replace(" ", "_") for c in df_copy.columns]
 
     # 2. Detect columns
-    cols = detect_columns(df_copy)
+    cols = detect_key_columns(df_copy)
 
     # 3. RFM
     rfm = compute_rfm(df_copy, cols)

@@ -15,17 +15,17 @@ from app.services.auth_services import (
 
 router = APIRouter()
 
-@router.post("/register", response_model=TokenResponse, status_code=201)
+@router.post("/register", status_code=201)
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
     user  = register_user(db, data)
+    return {"message": "Registration successful. Please check your email to verify your account."}
+
+@router.post("/verify", response_model=TokenResponse)
+def verify(data: VerifyRequest, db: Session = Depends(get_db)):
+    user = verify_email_code(db, data.email, data.code)
     token = create_access_token({"sub": str(user.id), "role": user.role})
     refresh_token = create_refresh_token({"sub": str(user.id)})
     return {"access_token": token, "refresh_token": refresh_token, "token_type": "bearer", "user": user}
-
-@router.post("/verify", response_model=UserResponse)
-def verify(data: VerifyRequest, db: Session = Depends(get_db)):
-    user = verify_email_code(db, data.email, data.code)
-    return user
 
 @router.post("/login", response_model=TokenResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)):

@@ -9,6 +9,7 @@ warnings.filterwarnings("ignore")
 from app.models.raw_data_row import RawDataRow
 from app.models.forecast_result import ForecastResult
 from app.models.uploaded_file import UploadedFile
+from app.utils.column_mapping import detect_key_columns
 
 
 from typing import Union, List
@@ -190,27 +191,9 @@ def run_arima_forecast_df(
     df_copy = df.copy()
     df_copy.columns = [c.strip().lower().replace(" ", "_") for c in df_copy.columns]
 
-    date_col = None
-    for c in ["date", "order_date", "transaction_date", "date_col"]:
-        if c in df_copy.columns:
-            date_col = c
-            break
-    if not date_col:
-        for c in df_copy.columns:
-            if "date" in c.lower():
-                date_col = c
-                break
-
-    amount_col = None
-    for c in ["total_sales", "sales", "revenue", "amount", "amount_col"]:
-        if c in df_copy.columns:
-            amount_col = c
-            break
-    if not amount_col:
-        for c in df_copy.columns:
-            if "sales" in c.lower() or "revenue" in c.lower() or "amount" in c.lower():
-                amount_col = c
-                break
+    detected = detect_key_columns(df_copy)
+    date_col = detected.get("date")
+    amount_col = detected.get("amount")
 
     if not date_col or not amount_col:
         raise ValueError(
