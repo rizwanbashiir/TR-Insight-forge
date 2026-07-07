@@ -72,7 +72,19 @@ def register_user(db: Session, data: RegisterRequest) -> User:
     if assigned_role == "admin":
         assigned_role = "analyst"
 
-    user.name = data.name
+    full_name = data.name
+    if not full_name and (data.first_name or data.last_name):
+        full_name = f"{data.first_name or ''} {data.last_name or ''}".strip()
+    if not full_name:
+        full_name = "User"
+
+    user.name = full_name
+    user.first_name = data.first_name
+    user.last_name = data.last_name
+    user.org_name = data.org_name
+    user.industry = data.industry
+    user.team_size = data.team_size
+    user.plan = data.plan
     user.password = hash_password(data.password)
     user.role = assigned_role
     user.is_active = False
@@ -131,11 +143,17 @@ def verify_email_code(db: Session, email: str, code: str) -> User:
         from app.models.organizations import Organization
         from app.models.subscriptions import Subscription
         
-        org = Organization(name=f"{user.name}'s Workspace")
+        org_name = user.org_name or f"{user.name}'s Workspace"
+        org = Organization(
+            name=org_name,
+            industry=user.industry,
+            team_size=user.team_size
+        )
         db.add(org)
         db.flush()  # gets the ID
 
-        sub = Subscription(organization_id=org.id, plan_tier="free", status="active")
+        plan_tier = (user.plan or "free").lower()
+        sub = Subscription(organization_id=org.id, plan_tier=plan_tier, status="active")
         db.add(sub)
         
         user.organization_id = org.id
@@ -238,8 +256,14 @@ def register_or_login_google(db: Session, token: str) -> dict:
         sub = Subscription(organization_id=org.id, plan_tier="free", status="active")
         db.add(sub)
 
+        parts = name.split(" ", 1)
+        first_name = google_data.get("given_name", parts[0])
+        last_name = google_data.get("family_name", parts[1] if len(parts) > 1 else "")
+
         user = User(
             name=name,
+            first_name=first_name,
+            last_name=last_name,
             email=email,
             password=hash_password(f"google-oauth-{random.randint(100000, 999999)}"),
             role="analyst",

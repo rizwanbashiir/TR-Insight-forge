@@ -5,10 +5,20 @@ from typing import List
 from app.config.database import get_db
 from app.utils.dependencies import require_role, get_current_user
 from app.models.users import User
-from app.schemas.organizations import AddUserRequest, AddUserResponse, UserInfo
-from app.services.org_services import add_user_to_organization, get_organization_users, resend_invite
+from app.schemas.organizations import AddUserRequest, AddUserResponse, UserInfo, OrganizationDashboardResponse
+from app.services.org_services import add_user_to_organization, get_organization_users, resend_invite, get_organization_dashboard
 
 router = APIRouter()
+
+@router.get("/dashboard", response_model=OrganizationDashboardResponse)
+def get_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get organization dashboard summary including organization info, subscription tier, and user list.
+    """
+    return get_organization_dashboard(db, current_user)
 
 @router.post("/users", response_model=AddUserResponse)
 def add_user(

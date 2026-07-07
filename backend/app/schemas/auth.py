@@ -10,10 +10,16 @@ class UserRole(str, Enum):
 
 # ── Request schemas (what client sends) ──
 class RegisterRequest(BaseModel):
-    name:     str
-    email:    EmailStr
-    password: str
-    role:     UserRole = UserRole.analyst
+    name:       Optional[str] = None
+    first_name: Optional[str] = None
+    last_name:  Optional[str] = None
+    email:      EmailStr
+    password:   str
+    role:       UserRole = UserRole.analyst
+    org_name:   Optional[str] = None
+    industry:   Optional[str] = None
+    team_size:  Optional[str] = None
+    plan:       Optional[str] = None
 
 class LoginRequest(BaseModel):
     email:    EmailStr
@@ -23,9 +29,15 @@ class LoginRequest(BaseModel):
 class UserResponse(BaseModel):
     id:         int
     name:       str
+    first_name: Optional[str] = None
+    last_name:  Optional[str] = None
     email:      str
     role:       UserRole
     is_active:  bool
+    org_name:   Optional[str] = None
+    industry:   Optional[str] = None
+    team_size:  Optional[str] = None
+    plan:       Optional[str] = None
     created_at: datetime
 
     class Config:
