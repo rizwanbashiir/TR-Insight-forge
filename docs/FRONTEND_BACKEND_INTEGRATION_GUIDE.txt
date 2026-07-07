@@ -1,0 +1,338 @@
+TR-InsightForge: Comprehensive Frontend-Backend Integration Guide
+================================================================
+
+This document provides a complete architecture summary of the backend enhancements made during our sessions and serves as a step-by-step integration guide for frontend developers. Every screen design has been mapped to its corresponding FastAPI backend endpoints, request schemas, and response data structures.
+
+----------------------------------------------------------------
+
+1. Executive Summary of Backend Enhancements
+----------------------------------------------------------------
+During our recent development cycle, we updated the backend to seamlessly power every UI layout shown in the frontend designs:
+
+1. Multi-Step Onboarding Storage:
+   * Expanded User and Organization Postgres models (app/models/users.py, app/models/organizations.py) with fields for first_name, last_name, org_name, industry, team_size, and plan.
+   * Added startup auto-migrations in app/main.py (ALTER TABLE ADD COLUMN IF NOT EXISTS) to preserve existing database records.
+   * Updated /auth/register, /auth/verify-email, and Google OAuth flows so user preferences are stored upon signup and applied when creating their workspace organization.
+2. Plan Tier Flexibility (No Billing Required):
+   * Users can select any plan (Free, Growth, or Enterprise) during signup without needing Stripe checkout or payment credentials.
+   * Updated app/services/quotas.py so both "growth" and "pro" map to the same mid-tier feature limits.
+3. Dashboard Summary Endpoint (GET /organizations/dashboard):
+   * Implemented a unified endpoint returning workspace metadata, active plan tier, and full team member lists in a single network call.
+4. Forecasting UI Alignment:
+   * Enhanced POST /forecast and GET /forecast/{file_id} to compute and return pre-formatted strings for UI KPI cards: "accuracy" (e.g. "94.7%"), "mape" (e.g. "5.3%"), and "confidence" (e.g. "95%").
+5. Customer Segmentation Bubble Chart & UI Alignment:
+   * Re-labeled K-Means clustering outputs to exactly match UI designs: Champions (#2ECC71), Loyal (#3498DB), At Risk (#E74C3C), and Needs Attention (#F39C12).
+   * Added summary card counters ("total_customers", "silhouette_score", "total_segments").
+   * Added a pre-calculated "chart_data" array providing exact (X, Y, Z) coordinates (x = Frequency, y = Recency, z = Monetary) for plug-and-play Bubble Chart rendering.
+6. AI Intelligence Hub Sidebar (GET /ai/history):
+   * Added an organization-wide chat history endpoint to populate the left panel while supporting multi-dataset RAG context (file_ids: [id1, id2]) via Pinecone vector search.
+7. Team Management (Billing Bypassed):
+   * Verified member listing, invitation (+ Invite member), and invitation resending flows while ensuring all billing barriers and seat quota blocks are bypassed.
+
+----------------------------------------------------------------
+
+2. Screen-by-Screen Integration Guide
+----------------------------------------------------------------
+
+### Screen 1: Multi-Step Signup & Authentication
+UI Design Context: The user enters their First Name, Last Name, Work Email, Password, Workspace/Organization Name, Industry, Team Size, and selects a Plan Tier (Free, Growth, Enterprise).
+
+A. Register User
+* Endpoint: POST /auth/register
+* Headers: Content-Type: application/json
+* Request Payload:
+  {
+    "first_name": "Ada",
+    "last_name": "Lovelace",
+    "email": "ada@acme.com",
+    "password": "SecurePassword123!",
+    "role": "admin",
+    "org_name": "Acme Inc.",
+    "industry": "SaaS",
+    "team_size": "12 seats",
+    "plan": "Growth"
+  }
+* Response: 200 OK returns user profile and sends a verification code via email.
+* UI Binding: Store the returned user email in state and transition the user to the Email Verification screen.
+
+B. Verify Email & Auto-Create Workspace
+* Endpoint: POST /auth/verify-email
+* Request Payload:
+  {
+    "email": "ada@acme.com",
+    "code": "123456"
+  }
+* Response: 200 OK activates the user account and auto-creates their Organization (Acme Inc.) and Subscription (Growth tier, status="active").
+* UI Binding: Redirect user to the Login screen or directly to /dashboard.
+
+
+### Screen 2: Home Page / Dashboard (/dashboard)
+UI Design Context: Displays the top navigation switcher (Acme Inc. | Growth - 12 seats), current user profile (Ada Lovelace | Admin), and business health KPI cards and charts.
+
+A. Fetch Workspace & Team Summary (Top Bar & User Profile)
+* Endpoint: GET /organizations/dashboard
+* Headers: Authorization: Bearer <jwt_token>
+* Response Structure:
+  {
+    "organization": {
+      "id": 1,
+      "name": "Acme Inc.",
+      "industry": "SaaS",
+      "team_size": "12 seats",
+      "created_at": "2026-07-06T12:00:00Z"
+    },
+    "subscription": {
+      "plan_tier": "growth",
+      "status": "active",
+      "current_period_end": null
+    },
+    "users": [
+      {
+        "id": 101,
+        "name": "Ada Lovelace",
+        "email": "ada@acme.com",
+        "role": "admin",
+        "is_active": true
+      }
+    ]
+  }
+* UI Binding:
+  * Top Left Switcher: Bind organization.name + subscription.plan_tier + organization.team_size.
+  * Bottom Left User Avatar: Filter users by current user email to display name and role ("Admin").
+
+B. Fetch Analytics KPI Summary Cards & Chart Data
+* Endpoint: GET /analytics/kpi
+* Headers: Authorization: Bearer <jwt_token>
+* Response Structure: Returns total revenue, transaction counts, customer counts, top product categories, and monthly trend arrays.
+* UI Binding:
+  * Bind Total Revenue ($284,219), Transactions (48,902), and Customers (12,438) to the top 4 KPI summary cards.
+  * Pass the monthly trend array directly into the Revenue trends line chart (Actual vs Forecast).
+  * Pass segment distribution data into the Sales distribution donut chart.
+
+
+### Screen 3: Forecasting (/forecasting)
+UI Design Context: Left panel for selecting a dataset, setting horizon slider (1mo - 24mo), and choosing a model. Right panel displays 3 KPI cards (ACCURACY, MAPE, CONFIDENCE) and a Revenue Forecast projection chart.
+
+A. Run AI Revenue Forecast
+* Endpoint: POST /forecast
+* Headers: Authorization: Bearer <jwt_token>, Content-Type: application/json
+* Request Payload:
+  {
+    "file_ids": [11],
+    "steps": 6,
+    "model": "Auto (ensemble)",
+    "confidence": 0.95
+  }
+* Response Structure:
+  {
+    "file_ids": [11],
+    "model": "Auto (ensemble)",
+    "arima_order": "(1, 1, 1)",
+    "mape_score": 5.3,
+    "mape": "5.3%",
+    "accuracy": "94.7%",
+    "confidence": "95%",
+    "forecast": {
+      "historical": [
+        {"date": "2024-01", "value": 32.5},
+        {"date": "2024-08", "value": 78.0}
+      ],
+      "forecast": [
+        {"date": "2024-09", "value": 81.2, "lower_ci": 75.0, "upper_ci": 87.4},
+        {"date": "2025-02", "value": 110.5, "lower_ci": 98.0, "upper_ci": 123.0}
+      ]
+    },
+    "message": "Forecast complete for 1 files."
+  }
+* UI Binding:
+  * Top Right KPI Cards: Bind response.accuracy ("94.7%"), response.mape ("5.3%"), and response.confidence ("95%") directly to the three summary cards.
+  * Revenue Forecast Chart:
+    * Map forecast.historical to the solid green historical line.
+    * Map forecast.forecast (date and value) to the purple dotted forecast line.
+    * Use lower_ci and upper_ci to render the shaded 95% confidence interval band.
+
+
+### Screen 4: Customer Segments (/segments)
+UI Design Context: Unsupervised learning RFM customer segmentation. Top cards show TOTAL CUSTOMERS, SILHOUETTE SCORE, and SEGMENTS. Middle section shows a Bubble Chart (Recency x Frequency · bubble size = Monetary). Bottom section shows the Segment Breakdown table.
+
+A. Run / Fetch Customer Segmentation
+* Endpoint: POST /segments (to compute) or GET /segments/{file_id} (to load saved results)
+* Headers: Authorization: Bearer <jwt_token>
+* Request Payload (for POST):
+  {
+    "file_ids": [11]
+  }
+* Response Structure:
+  {
+    "file_ids": [11],
+    "total_customers": 12438,
+    "silhouette_score": 0.71,
+    "total_segments": 4,
+    "segments": [
+      {
+        "cluster_id": 0,
+        "label": "Champions",
+        "color": "#2ECC71",
+        "customer_count": 1842,
+        "customer_pct": 14.8,
+        "revenue_pct": 42.1,
+        "avg_recency": 12.0,
+        "avg_frequency": 24.0,
+        "avg_monetary": 8420.0,
+        "strategy": "Reward loyalty · upsell premium"
+      },
+      {
+        "cluster_id": 1,
+        "label": "Loyal",
+        "color": "#3498DB",
+        "customer_count": 3211,
+        "customer_pct": 25.8,
+        "revenue_pct": 31.0,
+        "avg_recency": 28.0,
+        "avg_frequency": 14.0,
+        "avg_monetary": 3120.0,
+        "strategy": "Cross-sell · gather reviews"
+      }
+    ],
+    "chart_data": [
+      {
+        "customer_id": "C_101",
+        "x": 24,
+        "y": 12,
+        "z": 8420.0,
+        "cluster_id": 0,
+        "label": "Champions",
+        "color": "#2ECC71"
+      },
+      {
+        "customer_id": "C_102",
+        "x": 14,
+        "y": 28,
+        "z": 3120.0,
+        "cluster_id": 1,
+        "label": "Loyal",
+        "color": "#3498DB"
+      }
+    ]
+  }
+* UI Binding:
+  * Top KPI Cards: Bind total_customers (12,438), silhouette_score (0.71), and total_segments (4).
+  * Segment Clusters Bubble Chart: Pass chart_data directly into your scatter/bubble chart component (e.g., Recharts <ScatterChart>, Chart.js bubble, or ApexCharts):
+    * Horizontal (X) axis <- x (Frequency)
+    * Vertical (Y) axis <- y (Recency)
+    * Bubble radius (Z) <- z (Monetary spend)
+    * Bubble color <- color (#2ECC71 for Champions, #3498DB for Loyal, #E74C3C for At Risk, #F39C12 for Needs Attention).
+  * Segment Breakdown Table: Iterate over the segments array to render rows for Segment Name, Customers count, Avg Recency, Avg Frequency, Avg Monetary, and Recommended Action (strategy).
+
+
+### Screen 5: AI Intelligence Hub (/ai-chat)
+UI Design Context: Left panel displays CHAT HISTORY. Top context bar indicates selected datasets (orders_2024_q3.csv | customers_master.xlsx). Main chat window displays conversational Q&A with markdown formatting and tables.
+
+A. Load Chat History Sidebar
+* Endpoint: GET /ai/history
+* Headers: Authorization: Bearer <jwt_token>
+* Response Structure:
+  [
+    {
+      "id": 1,
+      "file_id": 11,
+      "filename": "orders_2024_q3.csv",
+      "model": "grok-beta",
+      "ai_response": "Q3 revenue grew **+27.4% YoY**, driven by...",
+      "generated_at": "2026-07-06T15:30:00Z"
+    }
+  ]
+* UI Binding: Render filename or a summary prompt as clickable items in the CHAT HISTORY left sidebar. Clicking an item reloads that historical chat session.
+
+B. Ask Question Across Live Datasets (Multi-Dataset RAG)
+* Endpoint: POST /ai/ask
+* Headers: Authorization: Bearer <jwt_token>, Content-Type: application/json
+* Request Payload:
+  {
+    "file_ids": [11, 12],
+    "question": "What were the top 3 drivers of revenue growth last quarter?"
+  }
+* Response Structure:
+  {
+    "file_ids": [11, 12],
+    "question": "What were the top 3 drivers of revenue growth last quarter?",
+    "chunks_used": 5,
+    "ai_response": "Q3 revenue grew **+27.4% YoY**, driven by:\n\n1. **Enterprise segment** — contributed 68% of net new revenue\n2. **EMEA region expansion** — +41% YoY\n3. **Multi-year contract conversions** — 14% LTV lift\n\n| Driver | Contribution |\n|---|---|\n| Enterprise | 68% |\n| EMEA | 22% |\n| Renewals | 10% |",
+    "model": "grok-beta"
+  }
+* UI Binding:
+  * Top Context Bar: Display tags for the selected file_ids / dataset names.
+  * Chat Window: Use a markdown renderer (e.g., react-markdown with remark-gfm) to render response.ai_response, automatically displaying bold bullet points and data tables.
+
+
+### Screen 6: Team & Billing (/team-billing)
+UI Design Context: Top cards display current plan ("Growth") and usage meters (SEATS USED, API QUOTA, STORAGE). Billing/payment methods are ignored. Bottom section shows the Team Members table with active roles and invite actions.
+
+A. List Team Members
+* Endpoint: GET /organizations/users
+* Headers: Authorization: Bearer <jwt_token>
+* Response Structure:
+  [
+    {
+      "id": 101,
+      "name": "Ada Lovelace",
+      "email": "ada@acme.com",
+      "role": "admin",
+      "is_active": true,
+      "password_changed": true,
+      "created_at": "2026-07-01T10:00:00Z"
+    },
+    {
+      "id": 102,
+      "name": "Grace Hopper",
+      "email": "grace@acme.com",
+      "role": "analyst",
+      "is_active": true,
+      "password_changed": false,
+      "created_at": "2026-07-05T14:30:00Z"
+    }
+  ]
+* UI Binding:
+  * Team Members Table: Map name and email to the MEMBER column, render initials in the avatar badge, capitalize role for the ROLE column (Admin, Analyst, Viewer), and show ● Active when is_active is true.
+
+B. Invite New Teammate (+ Invite member button)
+* Endpoint: POST /organizations/users
+* Headers: Authorization: Bearer <jwt_token>, Content-Type: application/json
+* Request Payload:
+  {
+    "name": "Grace Hopper",
+    "email": "grace@acme.com",
+    "role": "analyst"
+  }
+* Response Structure:
+  {
+    "message": "User added successfully.",
+    "user": {
+      "id": 102,
+      "name": "Grace Hopper",
+      "email": "grace@acme.com",
+      "role": "analyst",
+      "is_active": true,
+      "password_changed": false,
+      "created_at": "2026-07-06T18:00:00Z"
+    }
+  }
+* Note on Billing/Limits: As instructed, all subscription seat blocks and payment checks are bypassed in the backend. Admins can invite teammates without quota restrictions.
+
+C. Resend Invitation Link (Row Action Menu ...)
+* Endpoint: POST /organizations/users/{user_id}/resend-invite
+* Headers: Authorization: Bearer <jwt_token>
+* Response: 200 OK {"message": "Invite link resent successfully."}
+* UI Binding: Show a toast notification confirming that a fresh password reset invite link was generated and sent.
+
+----------------------------------------------------------------
+
+3. Quick Reference: Backend API Base URL & Authentication
+----------------------------------------------------------------
+* Base URL: http://localhost:8000 (or your staging domain)
+* Authentication: All protected endpoints require an OAuth2 / JWT Bearer token passed in the header:
+  Authorization: Bearer <your_access_token>
+* Error Handling: Standard FastAPI HTTP exceptions are returned in JSON format:
+  {
+    "detail": "Error message description here."
+  }
