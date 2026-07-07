@@ -19,6 +19,8 @@ class UserInfo(BaseModel):
 class OrganizationInfo(BaseModel):
     id: int
     name: str
+    industry: Optional[str] = None
+    team_size: Optional[str] = None
     stripe_customer_id: Optional[str] = None
     created_at: datetime
 

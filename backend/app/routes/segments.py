@@ -49,11 +49,30 @@ def segment_multiple(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    total_customers = sum(s.get("customer_count", 0) for s in result.segment_data)
+    cluster_lookup = {s["cluster_id"]: {"label": s["label"], "color": s.get("color", "#3498DB")} for s in result.segment_data}
+    chart_data = []
+    for r in (result.rfm_scores or []):
+        cid = r.get("Cluster", 0)
+        meta = cluster_lookup.get(cid, {"label": "Other", "color": "#888888"})
+        chart_data.append({
+            "customer_id": r.get("customer_id", ""),
+            "x": r.get("Frequency", 0),      # X-axis
+            "y": r.get("Recency", 0),        # Y-axis
+            "z": r.get("Monetary", 0),       # Bubble size
+            "cluster_id": cid,
+            "label": meta["label"],
+            "color": meta["color"]
+        })
+
     return {
         "file_ids"        : body.file_ids,
-        "silhouette_score": float(result.silhouette_score),
+        "total_customers" : int(total_customers),
+        "silhouette_score": round(float(result.silhouette_score), 2),
         "total_segments"  : len(result.segment_data),
         "segments"        : result.segment_data,
+        "chart_data"      : chart_data,
+        "rfm_scores"      : result.rfm_scores,
         "message"         : f"Segmentation complete for {len(body.file_ids)} files."
     }
 
@@ -99,9 +118,29 @@ def get_segmentation(
             detail="No segmentation found. Run POST /segment/{file_id} first."
         )
 
+    total_customers = sum(s.get("customer_count", 0) for s in result.segment_data)
+    cluster_lookup = {s["cluster_id"]: {"label": s["label"], "color": s.get("color", "#3498DB")} for s in result.segment_data}
+    chart_data = []
+    for r in (result.rfm_scores or []):
+        cid = r.get("Cluster", 0)
+        meta = cluster_lookup.get(cid, {"label": "Other", "color": "#888888"})
+        chart_data.append({
+            "customer_id": r.get("customer_id", ""),
+            "x": r.get("Frequency", 0),
+            "y": r.get("Recency", 0),
+            "z": r.get("Monetary", 0),
+            "cluster_id": cid,
+            "label": meta["label"],
+            "color": meta["color"]
+        })
+
     return {
         "file_id"         : file_id,
-        "silhouette_score": float(result.silhouette_score),
+        "total_customers" : int(total_customers),
+        "silhouette_score": round(float(result.silhouette_score), 2),
+        "total_segments"  : len(result.segment_data),
         "segments"        : result.segment_data,
+        "chart_data"      : chart_data,
+        "rfm_scores"      : result.rfm_scores,
         "generated_at"    : result.generated_at,
     }

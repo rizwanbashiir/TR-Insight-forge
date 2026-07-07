@@ -54,6 +54,7 @@ def build_text_chunks(
             "user_id"   : user_id,
             "file_type" : ftype,
             "chunk_type": "kpi_overall",
+            "text"      : kpi_text,
         }
     })
 
@@ -78,6 +79,7 @@ def build_text_chunks(
             "user_id"   : user_id,
             "file_type" : ftype,
             "chunk_type": "data_quality",
+            "text"      : quality_text,
         }
     })
 
@@ -101,6 +103,7 @@ def build_text_chunks(
                 "chunk_type": "monthly_trend",
                 "period"    : month,
                 "value"     : float(value),
+                "text"      : month_text,
             }
         })
 
@@ -124,6 +127,7 @@ def build_text_chunks(
                 "user_id"   : user_id,
                 "file_type" : ftype,
                 "chunk_type": "additional_metrics",
+                "text"      : metrics_text,
             }
         })
 
@@ -204,8 +208,8 @@ def search_similar_chunks(
     # Embed the query
     query_vector = embedding_model.encode([query])[0].tolist()
 
-    # Build filter — only return chunks for this user
-    pinecone_filter = {"user_id": {"$eq": user_id}}
+    # Build filter — we don't strictly filter by user_id anymore because files belong to an organization and can be shared.
+    pinecone_filter = {}
     if file_ids is not None:
         if isinstance(file_ids, list):
             if len(file_ids) == 1:
@@ -233,6 +237,7 @@ def search_similar_chunks(
             "chunk_type": match["metadata"].get("chunk_type"),
             "period"    : match["metadata"].get("period"),
             "file_id"   : match["metadata"].get("file_id"),
+            "text"      : match["metadata"].get("text", ""),
         })
 
     return matches

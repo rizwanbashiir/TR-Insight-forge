@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 from app.config.database import get_db
 from app.utils.dependencies import get_current_user, require_role
@@ -13,6 +13,9 @@ router = APIRouter()
 class MultiForecastRequest(BaseModel):
     file_ids: List[int]
     steps: int = 6
+    model: Optional[str] = None
+    confidence: Optional[float] = 0.95
+    confidence_interval: Optional[float] = 0.95
 
 @router.post("/", status_code=200)
 def forecast_multiple(
@@ -53,12 +56,17 @@ def forecast_multiple(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    conf_val = body.confidence or body.confidence_interval or 0.95
+    conf_str = f"{round(conf_val * 100)}%"
+
     return {
         "file_ids"   : body.file_ids,
-        "model"      : result.model_name,
+        "model"      : body.model or result.model_name,
         "arima_order": result.arima_order,
         "mape_score" : float(result.mape_score),
-        "accuracy"   : f"{round(100 - float(result.mape_score), 2)}%",
+        "mape"       : f"{round(float(result.mape_score), 1)}%",
+        "accuracy"   : f"{round(100 - float(result.mape_score), 1)}%",
+        "confidence" : conf_str,
         "forecast"   : result.forecast_data,
         "message"    : f"Forecast complete for {len(body.file_ids)} files."
     }
@@ -67,13 +75,15 @@ def forecast_multiple(
 def forecast(
     file_id     : int,
     steps       : int  = 6,
+    model       : Optional[str] = None,
+    confidence  : Optional[float] = 0.95,
     db          : Session = Depends(get_db),
     current_user: User    = Depends(require_role("admin", "analyst")),
 ):
     """
     Run ARIMA forecasting on a single uploaded sales file.
     """
-    req = MultiForecastRequest(file_ids=[file_id], steps=steps)
+    req = MultiForecastRequest(file_ids=[file_id], steps=steps, model=model, confidence=confidence)
     res = forecast_multiple(req, db, current_user)
     res["file_id"] = file_id
     return res
@@ -111,7 +121,9 @@ def get_forecast(
         "model"      : result.model_name,
         "arima_order": result.arima_order,
         "mape_score" : float(result.mape_score),
-        "accuracy"   : f"{round(100 - float(result.mape_score), 2)}%",
+        "mape"       : f"{round(float(result.mape_score), 1)}%",
+        "accuracy"   : f"{round(100 - float(result.mape_score), 1)}%",
+        "confidence" : "95%",
         "forecast"   : result.forecast_data,
         "generated_at": result.generated_at,
     }

@@ -16,6 +16,12 @@ class User(Base):
     id         = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True)
     name       = Column(String(100), nullable=False)
+    first_name = Column(String(100), nullable=True)
+    last_name  = Column(String(100), nullable=True)
+    org_name   = Column(String(255), nullable=True)
+    industry   = Column(String(100), nullable=True)
+    team_size  = Column(String(50), nullable=True)
+    plan       = Column(String(50), nullable=True)
     email      = Column(String(150), unique=True, index=True, nullable=False)
     password   = Column(String(255), nullable=False)   # hashed
     role       = Column(Enum(UserRole), default=UserRole.analyst)

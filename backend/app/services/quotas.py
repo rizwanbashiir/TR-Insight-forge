@@ -8,11 +8,11 @@ def verify_limits_and_tier(db: Session, org_id: int, action: str, check_value: i
     """
     Checks if an organization has exceeded quotas or feature gates based on subscription.
     """
-    # Temporarily disabled for testing
+    # Billing and quota checks disabled for now
     return
-    
+
     sub = db.query(Subscription).filter(Subscription.organization_id == org_id).first()
-    tier = sub.plan_tier if sub else "free"
+    tier = sub.plan_tier.lower() if sub and sub.plan_tier else "free"
     sub_status = sub.status if sub else "active"
 
     # Enforce active/trialing status check
@@ -27,24 +27,24 @@ def verify_limits_and_tier(db: Session, org_id: int, action: str, check_value: i
         if tier == "free" and file_count >= 3:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail="File upload limit reached (max 3 files on Free tier). Please upgrade to Pro."
+                detail="File upload limit reached (max 3 files on Free tier). Please upgrade to Growth/Pro."
             )
-        elif tier == "pro" and file_count >= 50:
+        elif tier in ["pro", "growth"] and file_count >= 50:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail="File upload limit reached (max 50 files on Pro tier). Please upgrade to Enterprise."
+                detail="File upload limit reached (max 50 files on Growth tier). Please upgrade to Enterprise."
             )
 
     elif action == "row_count":
         if tier == "free" and check_value > 5000:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=f"Dataset contains {check_value:,} rows, exceeding the 5,000 row limit on the Free tier. Please upgrade to Pro."
+                detail=f"Dataset contains {check_value:,} rows, exceeding the 5,000 row limit on the Free tier. Please upgrade to Growth/Pro."
             )
-        elif tier == "pro" and check_value > 100000:
+        elif tier in ["pro", "growth"] and check_value > 100000:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=f"Dataset contains {check_value:,} rows, exceeding the 100,000 row limit on the Pro tier. Please upgrade to Enterprise."
+                detail=f"Dataset contains {check_value:,} rows, exceeding the 100,000 row limit on the Growth tier. Please upgrade to Enterprise."
             )
 
     elif action == "ai_chat":

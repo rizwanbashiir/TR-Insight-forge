@@ -164,24 +164,24 @@ def label_segments(rfm: pd.DataFrame) -> list[dict]:
 
     segment_labels = {
         0: {
-            "label"   : "Retention",
-            "strategy": "Loyalty rewards, early access to new products, VIP treatment",
+            "label"   : "Champions",
+            "strategy": "Reward loyalty · upsell premium",
             "color"   : "#2ECC71",
         },
         1: {
-            "label"   : "Upsell",
-            "strategy": "Premium product recommendations, bundle offers, upgrade campaigns",
+            "label"   : "Loyal",
+            "strategy": "Cross-sell · gather reviews",
             "color"   : "#3498DB",
         },
         2: {
-            "label"   : "Win-back",
-            "strategy": "Re-engagement campaigns, special discounts, win-back emails",
-            "color"   : "#E67E22",
+            "label"   : "At Risk",
+            "strategy": "Trigger win-back campaign",
+            "color"   : "#E74C3C",
         },
         3: {
-            "label"   : "Nurture",
-            "strategy": "Educational content, entry-level offers, build engagement",
-            "color"   : "#9B59B6",
+            "label"   : "Needs Attention",
+            "strategy": "Re-engage with offer",
+            "color"   : "#F39C12",
         },
     }
 

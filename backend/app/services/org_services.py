@@ -5,8 +5,12 @@ import secrets
 from datetime import datetime, timedelta
 
 from app.models.users import User, UserRole
+from app.models.organizations import Organization
 from app.models.subscriptions import Subscription
-from app.schemas.organizations import AddUserRequest, AddUserResponse, UserInfo
+from app.schemas.organizations import (
+    AddUserRequest, AddUserResponse, UserInfo,
+    OrganizationInfo, SubscriptionInfo, OrganizationDashboardResponse
+)
 from app.services.auth_services import hash_password
 
 def generate_reset_token():
@@ -20,39 +24,43 @@ def add_user_to_organization(db: Session, data: AddUserRequest, current_user: Us
     if not org_id:
         raise HTTPException(status_code=400, detail="You do not belong to any organization.")
 
-    # Check subscription limits
-    sub = db.query(Subscription).filter(Subscription.organization_id == org_id).first()
-    if not sub:
-        raise HTTPException(status_code=400, detail="Organization has no active subscription.")
+    # # Commented out subscription based user registration module for now
+    # sub = db.query(Subscription).filter(Subscription.organization_id == org_id).first()
+    # if not sub:
+    #     raise HTTPException(status_code=400, detail="Organization has no active subscription.")
+    #
+    # plan_tier = sub.plan_tier.lower()
+    # 
+    # # Get current users in the organization
+    # org_users = db.query(User).filter(User.organization_id == org_id).all()
+    # 
+    # # Enforce Limits
+    # if plan_tier == "free":
+    #     if len(org_users) >= 1:
+    #         raise HTTPException(status_code=400, detail="Free plan is limited to 1 user.")
+    # elif plan_tier == "pro":
+    #     if len(org_users) >= 3:
+    #         raise HTTPException(status_code=400, detail="Pro plan is limited to 3 users.")
+    #     
+    #     # Enforce exactly 1 admin, 1 analyst, 1 viewer if they want strictly those roles.
+    #     # Check current roles to prevent duplicates
+    #     role_counts = {"admin": 0, "analyst": 0, "viewer": 0}
+    #     for u in org_users:
+    #         if u.role in role_counts:
+    #             role_counts[u.role] += 1
+    #     
+    #     requested_role = data.role.lower()
+    #     if requested_role not in role_counts:
+    #         raise HTTPException(status_code=400, detail="Invalid role. Must be analyst or viewer.")
+    #     
+    #     if role_counts[requested_role] >= 1:
+    #         raise HTTPException(status_code=400, detail=f"Pro plan only allows 1 {requested_role}.")
+    #         
+    # # Enterprise has no limits
 
-    plan_tier = sub.plan_tier.lower()
-    
-    # Get current users in the organization
-    org_users = db.query(User).filter(User.organization_id == org_id).all()
-    
-    # Enforce Limits
-    if plan_tier == "free":
-        if len(org_users) >= 1:
-            raise HTTPException(status_code=400, detail="Free plan is limited to 1 user.")
-    elif plan_tier == "pro":
-        if len(org_users) >= 3:
-            raise HTTPException(status_code=400, detail="Pro plan is limited to 3 users.")
-        
-        # Enforce exactly 1 admin, 1 analyst, 1 viewer if they want strictly those roles.
-        # Check current roles to prevent duplicates
-        role_counts = {"admin": 0, "analyst": 0, "viewer": 0}
-        for u in org_users:
-            if u.role in role_counts:
-                role_counts[u.role] += 1
-        
-        requested_role = data.role.lower()
-        if requested_role not in role_counts:
-            raise HTTPException(status_code=400, detail="Invalid role. Must be analyst or viewer.")
-        
-        if role_counts[requested_role] >= 1:
-            raise HTTPException(status_code=400, detail=f"Pro plan only allows 1 {requested_role}.")
-            
-    # Enterprise has no limits
+    requested_role = data.role.lower()
+    if requested_role not in ["admin", "analyst", "viewer"]:
+        raise HTTPException(status_code=400, detail="Invalid role. Must be admin, analyst, or viewer.")
 
     # Check if user email already exists globally
     existing_user = db.query(User).filter(User.email == data.email).first()
@@ -150,3 +158,33 @@ def resend_invite(db: Session, user_id: int, current_user: User):
     print("="*50 + "\n")
     
     return {"message": "Invite link resent successfully."}
+
+def get_organization_dashboard(db: Session, current_user: User) -> OrganizationDashboardResponse:
+    org_id = current_user.organization_id
+    if not org_id:
+        raise HTTPException(status_code=400, detail="You do not belong to any organization.")
+    
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    sub = db.query(Subscription).filter(Subscription.organization_id == org_id).first()
+    users = get_organization_users(db, current_user)
+    
+    org_info = OrganizationInfo(
+        id=org.id,
+        name=org.name,
+        industry=org.industry,
+        team_size=org.team_size,
+        stripe_customer_id=org.stripe_customer_id,
+        created_at=org.created_at
+    )
+    
+    sub_info = SubscriptionInfo(
+        plan_tier=sub.plan_tier if sub and sub.plan_tier else "free",
+        status=sub.status if sub and sub.status else "active",
+        current_period_end=sub.current_period_end if sub else None
+    )
+    
+    return OrganizationDashboardResponse(
+        organization=org_info,
+        subscription=sub_info,
+        users=users
+    )

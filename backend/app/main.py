@@ -106,6 +106,16 @@ try:
         # Add foreign key columns if they don't exist
         connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL"))
         connection.execute(text("ALTER TABLE uploaded_files ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE"))
+
+        # New columns for signup fields
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100)"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100)"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS org_name VARCHAR(255)"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS industry VARCHAR(100)"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS team_size VARCHAR(50)"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(50)"))
+        connection.execute(text("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS industry VARCHAR(100)"))
+        connection.execute(text("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS team_size VARCHAR(50)"))
         connection.commit()
 except Exception as e:
     print(f"Migration warning: {str(e)}")
@@ -202,7 +212,7 @@ app.include_router(upload.router, prefix="/upload", tags=["Upload"])
 app.include_router(ai.router, prefix="/ai", tags=["AI"])
 app.include_router(forcast.router, prefix="/forecast", tags=["Forecast"])
 app.include_router(segments.router, prefix="/segment", tags=["Segmentation"])
-app.include_router(billing.router, prefix="/billing", tags=["Billing"])
+# app.include_router(billing.router, prefix="/billing", tags=["Billing"]) # Disabled billing and subscription APIs for now
 app.include_router(organizations.router, prefix="/organizations", tags=["Organizations"])
 app.include_router(superadmin.router, prefix="/superadmin", tags=["SuperAdmin"])
 

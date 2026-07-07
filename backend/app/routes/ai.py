@@ -141,6 +141,36 @@ def ai_health():
     return check_grok_health()
 
 
+@router.get("/history", status_code=200)
+def list_ai_history(
+    db          : Session = Depends(get_db),
+    current_user: User    = Depends(get_current_user),
+):
+    """List all saved AI chat insights/history for the organization's CHAT HISTORY panel."""
+    from app.models.ai_insight import AiInsight
+    from app.models.uploaded_file import UploadedFile
+
+    insights = (
+        db.query(AiInsight)
+        .join(UploadedFile, AiInsight.file_id == UploadedFile.id)
+        .filter(UploadedFile.organization_id == current_user.organization_id)
+        .order_by(AiInsight.generated_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id"          : insight.id,
+            "file_id"     : insight.file_id,
+            "filename"    : insight.file.original_filename if insight.file else "Dataset",
+            "model"       : insight.model_name,
+            "ai_response" : insight.ai_response,
+            "generated_at": insight.generated_at,
+        }
+        for insight in insights
+    ]
+
+
 @router.get("/history/{file_id}", status_code=200)
 def get_ai_history(
     file_id     : int,
