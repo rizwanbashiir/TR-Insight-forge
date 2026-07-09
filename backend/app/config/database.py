@@ -1,18 +1,48 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from motor.motor_asyncio import AsyncIOMotorClient
+from beanie import init_beanie
 from app.config.settings import settings
 
-engine = create_engine(settings.DATABASE_URL)
+# Compatibility patch for Motor 3.7+ with Beanie
+if not callable(getattr(AsyncIOMotorClient, "append_metadata", None)):
+    AsyncIOMotorClient.append_metadata = lambda self, *args, **kwargs: self.delegate.append_metadata(*args, **kwargs)
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Global motor client instance
+client: AsyncIOMotorClient = None
 
-Base = declarative_base()
+async def init_db():
+    global client
+    client = AsyncIOMotorClient(settings.MONGODB_URL)
+    db = client[settings.MONGODB_DB_NAME]
 
-# Dependency — inject DB session into routes
+    from app.models.organizations import Organization
+    from app.models.users import User
+    from app.models.subscriptions import Subscription
+    from app.models.uploaded_file import UploadedFile
+    from app.models.raw_data_row import RawDataRow
+    from app.models.processed_dataset import ProcessedDataset
+    from app.models.ai_insight import AIInsight
+    from app.models.forecast_result import ForecastResult
+    from app.models.segment_result import SegmentResult
+
+    await init_beanie(
+        database=db,
+        document_models=[
+            Organization,
+            User,
+            Subscription,
+            UploadedFile,
+            RawDataRow,
+            ProcessedDataset,
+            AIInsight,
+            ForecastResult,
+            SegmentResult,
+        ],
+    )
+
 def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    """
+    Dependency helper returning the async MongoDB database instance.
+    """
+    if client is None:
+        return None
+    return client[settings.MONGODB_DB_NAME]

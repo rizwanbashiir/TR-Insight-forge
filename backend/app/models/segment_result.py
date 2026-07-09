@@ -1,17 +1,15 @@
-from sqlalchemy import Column, Integer, ForeignKey, DateTime, Numeric
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
-from app.config.database import Base
+from beanie import Document, PydanticObjectId
+from pydantic import Field
+from typing import Optional, Dict, Any, List
+from datetime import datetime, timezone
 
-class SegmentResult(Base):
-    __tablename__ = "segment_results"
+class SegmentResult(Document):
+    file_id: PydanticObjectId
+    silhouette_score: Optional[float] = None
+    segment_data: Optional[Any] = None
+    rfm_scores: Optional[Any] = None
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    id               = Column(Integer, primary_key=True, index=True)
-    file_id          = Column(Integer, ForeignKey("uploaded_files.id", ondelete="CASCADE"), unique=True)
-    silhouette_score = Column(Numeric)
-    segment_data     = Column(JSONB)
-    rfm_scores       = Column(JSONB)
-    generated_at     = Column(DateTime(timezone=True), server_default=func.now())
-
-    file             = relationship("UploadedFile", back_populates="segment_result")
+    class Settings:
+        name = "segment_results"
+        indexes = ["file_id"]

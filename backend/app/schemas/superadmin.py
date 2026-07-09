@@ -10,7 +10,7 @@ class CreateEnterpriseRequest(BaseModel):
     stripe_customer_id: Optional[str] = None
 
 class OverrideSubscriptionRequest(BaseModel):
-    organization_id: int
+    organization_id: str
     plan_tier: str
 
 

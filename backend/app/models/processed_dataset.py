@@ -1,21 +1,19 @@
-from sqlalchemy import Column, Integer, ForeignKey, DateTime, Numeric
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
-from app.config.database import Base
+from beanie import Document, PydanticObjectId
+from pydantic import Field
+from typing import Optional, Dict, Any
+from datetime import datetime, timezone
 
-class ProcessedDataset(Base):
-    __tablename__ = "processed_datasets"
+class ProcessedDataset(Document):
+    file_id: PydanticObjectId
+    total_rows: Optional[int] = None
+    valid_rows: Optional[int] = None
+    duplicate_count: Optional[int] = None
+    missing_values: Optional[Dict[str, Any]] = None
+    outliers_detected: Optional[Dict[str, Any]] = None
+    column_types: Optional[Dict[str, Any]] = None
+    kpi_summary: Optional[Dict[str, Any]] = None
+    processed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    id                = Column(Integer, primary_key=True, index=True)
-    file_id           = Column(Integer, ForeignKey("uploaded_files.id", ondelete="CASCADE"), unique=True)
-    total_rows        = Column(Integer)
-    valid_rows        = Column(Integer)
-    duplicate_count   = Column(Integer)
-    missing_values    = Column(JSONB)
-    outliers_detected = Column(JSONB)
-    column_types      = Column(JSONB)
-    kpi_summary       = Column(JSONB)
-    processed_at      = Column(DateTime(timezone=True), server_default=func.now())
-
-    file              = relationship("UploadedFile", back_populates="processed_dataset")
+    class Settings:
+        name = "processed_datasets"
+        indexes = ["file_id"]

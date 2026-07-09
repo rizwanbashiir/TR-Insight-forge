@@ -8,7 +8,7 @@ class AddUserRequest(BaseModel):
     role: str # admin, analyst, viewer
 
 class UserInfo(BaseModel):
-    id: int
+    id: str
     name: str
     email: str
     role: str
@@ -17,7 +17,7 @@ class UserInfo(BaseModel):
     created_at: datetime
 
 class OrganizationInfo(BaseModel):
-    id: int
+    id: str
     name: str
     industry: Optional[str] = None
     team_size: Optional[str] = None

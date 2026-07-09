@@ -1,18 +1,16 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Numeric
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
-from app.config.database import Base
+from beanie import Document, PydanticObjectId
+from pydantic import Field
+from typing import Optional, Dict, Any, List
+from datetime import datetime, timezone
 
-class ForecastResult(Base):
-    __tablename__ = "forecast_results"
+class ForecastResult(Document):
+    file_id: PydanticObjectId
+    model_name: str = "ARIMA"
+    arima_order: Optional[str] = None
+    mape_score: Optional[float] = None
+    forecast_data: Optional[Any] = None
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    id            = Column(Integer, primary_key=True, index=True)
-    file_id       = Column(Integer, ForeignKey("uploaded_files.id", ondelete="CASCADE"), unique=True)
-    model_name    = Column(String(50), default="ARIMA")
-    arima_order   = Column(String(20))
-    mape_score    = Column(Numeric)
-    forecast_data = Column(JSONB)
-    generated_at  = Column(DateTime(timezone=True), server_default=func.now())
-
-    file          = relationship("UploadedFile", back_populates="forecast_result")
+    class Settings:
+        name = "forecast_results"
+        indexes = ["file_id"]
