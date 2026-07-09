@@ -1,20 +1,18 @@
-from sqlalchemy import Column, Integer, ForeignKey, Date, Numeric, Index
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship
-from app.config.database import Base
+from beanie import Document, PydanticObjectId
+from typing import Optional, Dict, Any
+from datetime import date
 
-class RawDataRow(Base):
-    __tablename__ = "raw_data_rows"
+class RawDataRow(Document):
+    file_id: PydanticObjectId
+    row_index: int
+    raw_data: Dict[str, Any]
+    date_col: Optional[date] = None
+    amount_col: Optional[float] = None
 
-    id         = Column(Integer, primary_key=True, index=True)
-    file_id    = Column(Integer, ForeignKey("uploaded_files.id", ondelete="CASCADE"), nullable=False)
-    row_index  = Column(Integer, nullable=False)
-    raw_data   = Column(JSONB, nullable=False)
-    date_col   = Column(Date)
-    amount_col = Column(Numeric)
-
-    file       = relationship("UploadedFile", back_populates="raw_rows")
-
-    __table_args__ = (
-        Index("ix_raw_data_file_date", "file_id", "date_col"),
-    )
+    class Settings:
+        name = "raw_data_rows"
+        indexes = [
+            "file_id",
+            [("file_id", 1), ("row_index", 1)],
+            [("file_id", 1), ("date_col", 1)],
+        ]

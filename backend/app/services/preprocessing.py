@@ -1,48 +1,31 @@
 import pandas as pd
 import numpy as np
-from sqlalchemy.orm import Session
+from beanie import PydanticObjectId
 
 from app.models.raw_data_row import RawDataRow
 from app.models.uploaded_file import UploadedFile, FileStatus
 from app.models.processed_dataset import ProcessedDataset
 
 
-# ── Step 1: Load raw rows from DB into a DataFrame ───────────────────
-def load_raw_data(db: Session, file_id: int) -> pd.DataFrame:
-    """
-    Read all raw_data_rows for a file from PostgreSQL
-    and return as a pandas DataFrame.
-    """
-    rows = (
-        db.query(RawDataRow)
-        .filter(RawDataRow.file_id == file_id)
-        .order_by(RawDataRow.row_index)
-        .all()
-    )
+async def load_raw_data(db, file_id) -> pd.DataFrame:
+    oid = PydanticObjectId(file_id) if isinstance(file_id, str) else file_id
+    rows = await RawDataRow.find(RawDataRow.file_id == oid).sort("row_index").to_list()
 
     if not rows:
         raise ValueError(f"No raw data found for file_id {file_id}")
 
-    # Each row.raw_data is a dict — build DataFrame from list of dicts
     records = [row.raw_data for row in rows]
     df = pd.DataFrame(records)
-
     return df
 
 
-# ── Step 2: Clean the DataFrame ──────────────────────────────────────
 def clean_data(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
-    """
-    Full preprocessing pipeline.
-    Returns (cleaned_df, quality_report).
-    """
     report = {}
 
-    # ── Missing values ──
     missing_before = df.isnull().sum().to_dict()
     missing_before = {k: int(v) for k, v in missing_before.items() if v > 0}
 
-    numeric_cols     = df.select_dtypes(include=np.number).columns.tolist()
+    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
     categorical_cols = df.select_dtypes(exclude=np.number).columns.tolist()
 
     for col in numeric_cols:
@@ -59,18 +42,16 @@ def clean_data(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     }
 
     report["missing_values_before"] = missing_before
-    report["missing_values_after"]  = missing_after
+    report["missing_values_after"] = missing_after
 
-    # ── Duplicates ──
     duplicates_removed = int(df.duplicated().sum())
     df = df.drop_duplicates()
     report["duplicates_removed"] = duplicates_removed
 
-    # ── Outlier detection (IQR method) ──
     outlier_report = {}
     for col in numeric_cols:
-        Q1  = df[col].quantile(0.25)
-        Q3  = df[col].quantile(0.75)
+        Q1 = df[col].quantile(0.25)
+        Q3 = df[col].quantile(0.75)
         IQR = Q3 - Q1
         lower = Q1 - 1.5 * IQR
         upper = Q3 + 1.5 * IQR
@@ -80,12 +61,10 @@ def clean_data(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
 
     report["outliers_detected"] = outlier_report
 
-    # ── Date normalization ──
     for col in df.columns:
         if "date" in col.lower():
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # ── Column type inference ──
     col_types = {}
     for col in df.columns:
         dtype = str(df[col].dtype)
@@ -96,14 +75,13 @@ def clean_data(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
         else:
             col_types[col] = "string"
 
-    report["column_types"]  = col_types
-    report["final_rows"]    = len(df)
+    report["column_types"] = col_types
+    report["final_rows"] = len(df)
     report["final_columns"] = len(df.columns)
 
     return df, report
 
 
-# ── Step 3: Compute KPIs ─────────────────────────────────────────────
 def compute_kpis(df: pd.DataFrame, file_type: str) -> dict:
     import re
 
@@ -121,21 +99,14 @@ def compute_kpis(df: pd.DataFrame, file_type: str) -> dict:
         return None
 
     def clean_numeric_series(series):
-        """
-        Safely convert any series to numeric.
-        Handles: ₹1,299 | $500 | ₹1,099₹349 (takes first value only)
-        """
         def clean_val(val):
             if pd.isna(val):
                 return 0.0
             s = str(val).strip()
-            # Multiple ₹ signs — take only first price
             if s.count("₹") > 1:
                 parts = [p for p in s.split("₹") if p.strip()]
                 s = parts[0] if parts else "0"
-            # Strip all currency symbols
             s = re.sub(r"[₹$£€,\s]", "", s)
-            # Extract first valid number
             match = re.search(r"[\d.]+", s)
             if match:
                 try:
@@ -146,7 +117,6 @@ def compute_kpis(df: pd.DataFrame, file_type: str) -> dict:
 
         return series.apply(clean_val)
 
-    # ── Amount column ──
     amount_col = find_col(df, [
         "revenue", "sales", "amount", "income",
         "expense", "cost", "total", "price", "value"
@@ -154,49 +124,42 @@ def compute_kpis(df: pd.DataFrame, file_type: str) -> dict:
 
     if amount_col:
         clean_amt = clean_numeric_series(df[amount_col])
-        kpis["total_amount"]       = round(float(clean_amt.sum()), 2)
-        kpis["average_amount"]     = round(float(clean_amt.mean()), 2)
-        kpis["max_amount"]         = round(float(clean_amt.max()), 2)
-        kpis["min_amount"]         = round(float(clean_amt.min()), 2)
+        kpis["total_amount"] = round(float(clean_amt.sum()), 2)
+        kpis["average_amount"] = round(float(clean_amt.mean()), 2)
+        kpis["max_amount"] = round(float(clean_amt.max()), 2)
+        kpis["min_amount"] = round(float(clean_amt.min()), 2)
         kpis["amount_column_used"] = amount_col
 
-    # ── Profit column ──
     profit_col = find_col(df, ["profit", "margin", "net", "gross"])
     if profit_col and profit_col != amount_col:
         clean_profit = clean_numeric_series(df[profit_col])
-        kpis["total_profit"]       = round(float(clean_profit.sum()), 2)
+        kpis["total_profit"] = round(float(clean_profit.sum()), 2)
         kpis["profit_column_used"] = profit_col
 
-    # ── Order count ──
     order_col = find_col(df, ["order_id", "invoice", "transaction", "order"])
     if order_col:
         kpis["total_orders"] = int(df[order_col].nunique())
 
-    # ── Customer count ──
     customer_col = find_col(df, ["customer", "client", "user", "buyer"])
     if customer_col:
         kpis["unique_customers"] = int(df[customer_col].nunique())
 
-    # ── Store count ──
     store_col = find_col(df, ["store", "branch", "location", "region", "shop"])
     if store_col:
         kpis["unique_stores"] = int(df[store_col].nunique())
 
-    # ── Top category ──
     category_col = find_col(df, ["category", "segment", "department", "type", "product"])
     if category_col:
         mode_val = df[category_col].mode()
         if not mode_val.empty:
-            kpis["top_category"]      = str(mode_val[0])
+            kpis["top_category"] = str(mode_val[0])
             kpis["category_col_used"] = category_col
 
-    # ── Date column ──
     date_col = find_col(df, [
         "date", "order_date", "transaction_date",
         "invoice_date", "sale_date", "period", "month"
     ])
 
-    # ── Monthly trend ──
     if date_col and amount_col:
         try:
             df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
@@ -214,18 +177,17 @@ def compute_kpis(df: pd.DataFrame, file_type: str) -> dict:
         except Exception as e:
             kpis["monthly_trend_error"] = str(e)
 
-    # ── Additional numeric stats ──
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
     already_used = {amount_col, profit_col, order_col, store_col}
-    extra_stats  = {}
+    extra_stats = {}
 
     for col in numeric_cols:
         if col not in already_used and col is not None:
             try:
                 extra_stats[col] = {
                     "mean": round(float(df[col].mean()), 4),
-                    "min" : round(float(df[col].min()), 4),
-                    "max" : round(float(df[col].max()), 4),
+                    "min": round(float(df[col].min()), 4),
+                    "max": round(float(df[col].max()), 4),
                 }
             except Exception:
                 pass
@@ -234,82 +196,63 @@ def compute_kpis(df: pd.DataFrame, file_type: str) -> dict:
         kpis["additional_metrics"] = extra_stats
 
     kpis["total_rows"] = len(df)
-    kpis["file_type"]  = str(file_type)
+    kpis["file_type"] = str(file_type)
 
     return kpis
-# ── Step 4: Main pipeline — called from the route ────────────────────
-def run_preprocessing_pipeline(
-    db     : Session,
-    file_id: int
+
+
+async def run_preprocessing_pipeline(
+    db,
+    file_id
 ) -> ProcessedDataset:
-    """
-    Full pipeline:
-    1. Load raw rows from DB
-    2. Clean the data
-    3. Compute KPIs
-    4. Save processed_dataset record
-    5. Update file status to 'processed'
-    """
+    oid = PydanticObjectId(file_id) if isinstance(file_id, str) else file_id
 
-    # Mark file as processing
-    file_record = db.query(UploadedFile).filter(
-        UploadedFile.id == file_id
-    ).first()
-
+    file_record = await UploadedFile.get(oid)
     if not file_record:
         raise ValueError(f"File {file_id} not found")
 
     file_record.status = FileStatus.processing
-    db.commit()
+    await file_record.save()
 
     try:
-        # 1. Load
-        df = load_raw_data(db, file_id)
+        df = await load_raw_data(db, oid)
 
-        # 2. Clean
         cleaned_df, quality_report = clean_data(df)
 
-        # 3. KPIs
         kpi_summary = compute_kpis(cleaned_df, file_record.file_type)
 
-        # 4. Save processed result
-        existing = db.query(ProcessedDataset).filter(
-            ProcessedDataset.file_id == file_id
-        ).first()
+        existing = await ProcessedDataset.find_one(ProcessedDataset.file_id == oid)
 
         if existing:
-            # Update if already exists
-            existing.total_rows        = quality_report["final_rows"]
-            existing.valid_rows        = quality_report["final_rows"]
-            existing.duplicate_count   = quality_report["duplicates_removed"]
-            existing.missing_values    = quality_report["missing_values_before"]
+            existing.total_rows = quality_report["final_rows"]
+            existing.valid_rows = quality_report["final_rows"]
+            existing.duplicate_count = quality_report["duplicates_removed"]
+            existing.missing_values = quality_report["missing_values_before"]
             existing.outliers_detected = quality_report["outliers_detected"]
-            existing.column_types      = quality_report["column_types"]
-            existing.kpi_summary       = kpi_summary
+            existing.column_types = quality_report["column_types"]
+            existing.kpi_summary = kpi_summary
             processed = existing
+            await processed.save()
         else:
             processed = ProcessedDataset(
-                file_id           = file_id,
-                total_rows        = quality_report["final_rows"],
-                valid_rows        = quality_report["final_rows"],
-                duplicate_count   = quality_report["duplicates_removed"],
-                missing_values    = quality_report["missing_values_before"],
-                outliers_detected = quality_report["outliers_detected"],
-                column_types      = quality_report["column_types"],
-                kpi_summary       = kpi_summary,
+                file_id=oid,
+                total_rows=quality_report["final_rows"],
+                valid_rows=quality_report["final_rows"],
+                duplicate_count=quality_report["duplicates_removed"],
+                missing_values=quality_report["missing_values_before"],
+                outliers_detected=quality_report["outliers_detected"],
+                column_types=quality_report["column_types"],
+                kpi_summary=kpi_summary,
             )
-            db.add(processed)
+            await processed.insert()
 
-        # 5. Update file status
         file_record.status = FileStatus.processed
-        db.commit()
-        db.refresh(processed)
+        await file_record.save()
 
         return processed
 
     except Exception as e:
-        # Mark as failed if anything goes wrong
-        file_record.status        = FileStatus.failed
+        file_record.status = FileStatus.failed
         file_record.error_message = str(e)
-        db.commit()
+        await file_record.save()
         raise

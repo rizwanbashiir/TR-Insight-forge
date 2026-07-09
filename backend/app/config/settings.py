@@ -14,6 +14,8 @@ for parent in Path(__file__).resolve().parents:
 class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql://postgres@localhost:5432/analytics_db"
+    MONGODB_URL: str = "mongodb+srv://rizwanbashir2311:Admin123@cluster0.pe8t6r0.mongodb.net/"
+    MONGODB_DB_NAME: str = "analytics_db"
     
     # JWT
     PORT: int = 8000

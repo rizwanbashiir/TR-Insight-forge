@@ -1,26 +1,26 @@
-from sqlalchemy.orm import Session
 from fastapi import HTTPException
+from beanie import PydanticObjectId
 from app.models.organizations import Organization
 from app.models.subscriptions import Subscription
-from app.models.users import User
+from app.models.users import User, UserRole
 from app.schemas.superadmin import SuperAdminDashboardResponse, OrganizationOverview, CreateEnterpriseRequest, OverrideSubscriptionRequest
 from app.schemas.organizations import OrganizationInfo, SubscriptionInfo, UserInfo
 from app.services.auth_services import hash_password
 
-def get_superadmin_dashboard(db: Session) -> SuperAdminDashboardResponse:
-    orgs = db.query(Organization).all()
-    all_db_users = db.query(User).all()
-    
+async def get_superadmin_dashboard(db) -> SuperAdminDashboardResponse:
+    orgs = await Organization.find_all().to_list()
+    all_db_users = await User.find_all().to_list()
+
     total_organizations = len(orgs)
     total_users = len(all_db_users)
     active_subscriptions = 0
     free_subscriptions = 0
     enterprise_subscriptions = 0
     pro_subscriptions = 0
-    
+
     all_user_infos = [
         UserInfo(
-            id=u.id,
+            id=str(u.id),
             name=u.name,
             email=u.email,
             role=u.role,
@@ -29,17 +29,17 @@ def get_superadmin_dashboard(db: Session) -> SuperAdminDashboardResponse:
             created_at=u.created_at
         ) for u in all_db_users
     ]
-    
+
     org_overviews = []
-    
+
     for org in orgs:
-        sub = db.query(Subscription).filter(Subscription.organization_id == org.id).first()
-        org_users = db.query(User).filter(User.organization_id == org.id).all()
+        sub = await Subscription.find_one(Subscription.organization_id == org.id)
+        org_users = await User.find(User.organization_id == org.id).to_list()
         user_count = len(org_users)
-        
+
         org_user_infos = [
             UserInfo(
-                id=u.id,
+                id=str(u.id),
                 name=u.name,
                 email=u.email,
                 role=u.role,
@@ -48,7 +48,7 @@ def get_superadmin_dashboard(db: Session) -> SuperAdminDashboardResponse:
                 created_at=u.created_at
             ) for u in org_users
         ]
-        
+
         if sub:
             if sub.status == "active":
                 active_subscriptions += 1
@@ -58,24 +58,24 @@ def get_superadmin_dashboard(db: Session) -> SuperAdminDashboardResponse:
                 enterprise_subscriptions += 1
             elif sub.plan_tier == "pro":
                 pro_subscriptions += 1
-                
-            org_overviews.append(
-                OrganizationOverview(
-                    organization=OrganizationInfo(
-                        id=org.id,
-                        name=org.name,
-                        stripe_customer_id=org.stripe_customer_id,
-                        created_at=org.created_at
-                    ),
-                    subscription=SubscriptionInfo(
-                        plan_tier=sub.plan_tier,
-                        status=sub.status,
-                        current_period_end=sub.current_period_end
-                    ),
-                    user_count=user_count,
-                    users=org_user_infos
-                )
+
+        org_overviews.append(
+            OrganizationOverview(
+                organization=OrganizationInfo(
+                    id=str(org.id),
+                    name=org.name,
+                    stripe_customer_id=org.stripe_customer_id,
+                    created_at=org.created_at
+                ),
+                subscription=SubscriptionInfo(
+                    plan_tier=sub.plan_tier if sub else "free",
+                    status=sub.status if sub else "active",
+                    current_period_end=sub.current_period_end if sub else None
+                ),
+                user_count=user_count,
+                users=org_user_infos
             )
+        )
 
     return SuperAdminDashboardResponse(
         total_organizations=total_organizations,
@@ -88,64 +88,64 @@ def get_superadmin_dashboard(db: Session) -> SuperAdminDashboardResponse:
         all_users=all_user_infos
     )
 
-def create_enterprise_organization(db: Session, data: CreateEnterpriseRequest) -> dict:
-    existing_user = db.query(User).filter(User.email == data.admin_email).first()
+async def create_enterprise_organization(db, data: CreateEnterpriseRequest) -> dict:
+    existing_user = await User.find_one(User.email == data.admin_email)
     if existing_user:
         raise HTTPException(status_code=400, detail="A user with this email already exists.")
-        
+
     org = Organization(
         name=data.name,
         stripe_customer_id=data.stripe_customer_id
     )
-    db.add(org)
-    db.flush()
-    
+    await org.insert()
+
     sub = Subscription(
         organization_id=org.id,
         plan_tier="enterprise",
         status="active"
     )
-    db.add(sub)
-    
+    await sub.insert()
+
     admin_user = User(
         name=data.admin_name,
         email=data.admin_email,
-        password=hash_password("TempPassword123!"), # Standard temp password, should be changed
-        role="admin",
+        password=hash_password("TempPassword123!"),
+        role=UserRole.admin,
         is_active=True,
         organization_id=org.id
     )
-    db.add(admin_user)
-    db.commit()
-    db.refresh(org)
-    
-    return {"message": "Enterprise organization created successfully.", "organization_id": org.id}
+    await admin_user.insert()
 
-def override_organization_subscription(db: Session, data: OverrideSubscriptionRequest) -> dict:
+    return {"message": "Enterprise organization created successfully.", "organization_id": str(org.id)}
+
+async def override_organization_subscription(db, data: OverrideSubscriptionRequest) -> dict:
     if data.plan_tier not in ["free", "pro", "enterprise"]:
         raise HTTPException(status_code=400, detail="Invalid plan tier. Choose 'free', 'pro', or 'enterprise'.")
-    
-    org = db.query(Organization).filter(Organization.id == data.organization_id).first()
+
+    try:
+        oid = PydanticObjectId(data.organization_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid organization ID")
+
+    org = await Organization.get(oid)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
-        
-    sub = db.query(Subscription).filter(Subscription.organization_id == org.id).first()
+
+    sub = await Subscription.find_one(Subscription.organization_id == org.id)
     if not sub:
         sub = Subscription(
             organization_id=org.id,
             plan_tier=data.plan_tier,
             status="active"
         )
-        db.add(sub)
+        await sub.insert()
     else:
         sub.plan_tier = data.plan_tier
         sub.status = "active"
-        
-    db.commit()
-    db.refresh(sub)
-    
+        await sub.save()
+
     return {
         "message": f"Successfully overridden subscription tier to '{data.plan_tier}'",
-        "organization_id": org.id,
+        "organization_id": str(org.id),
         "plan_tier": sub.plan_tier
     }

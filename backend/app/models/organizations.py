@@ -1,18 +1,14 @@
-from sqlalchemy import Column, Integer, String, DateTime
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
-from app.config.database import Base
+from beanie import Document
+from pydantic import Field
+from typing import Optional
+from datetime import datetime, timezone
 
-class Organization(Base):
-    __tablename__ = "organizations"
+class Organization(Document):
+    name: str
+    industry: Optional[str] = None
+    team_size: Optional[str] = None
+    stripe_customer_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    id                 = Column(Integer, primary_key=True, index=True)
-    name               = Column(String(255), nullable=False)
-    industry           = Column(String(100), nullable=True)
-    team_size          = Column(String(50), nullable=True)
-    stripe_customer_id = Column(String(255), nullable=True)
-    created_at         = Column(DateTime(timezone=True), server_default=func.now())
-
-    users              = relationship("User", back_populates="organization", cascade="all, delete-orphan")
-    uploaded_files     = relationship("UploadedFile", back_populates="organization", cascade="all, delete-orphan")
-    subscription       = relationship("Subscription", back_populates="organization", uselist=False, cascade="all, delete-orphan")
+    class Settings:
+        name = "organizations"

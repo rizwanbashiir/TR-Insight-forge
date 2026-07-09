@@ -18,7 +18,7 @@ class FileStatus(str, Enum):
 
 # What we return after a successful upload
 class UploadResponse(BaseModel):
-    file_id          : int
+    file_id          : str
     original_filename: str
     file_type        : FileType
     file_format      : str

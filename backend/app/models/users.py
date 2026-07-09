@@ -1,8 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, ForeignKey
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
+from beanie import Document, PydanticObjectId
+from pydantic import Field
+from typing import Optional
+from datetime import datetime, timezone
 import enum
-from app.config.database import Base
 
 class UserRole(str, enum.Enum):
     super_admin = "super_admin"
@@ -10,27 +10,25 @@ class UserRole(str, enum.Enum):
     analyst = "analyst"
     viewer  = "viewer"
 
-class User(Base):
-    __tablename__ = "users"
+class User(Document):
+    organization_id: Optional[PydanticObjectId] = None
+    name: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    org_name: Optional[str] = None
+    industry: Optional[str] = None
+    team_size: Optional[str] = None
+    plan: Optional[str] = None
+    email: str
+    password: str
+    role: UserRole = UserRole.analyst
+    is_active: bool = False
+    verification_code: Optional[str] = None
+    verification_expires: Optional[datetime] = None
+    password_changed: bool = False
+    reset_password_token: Optional[str] = None
+    reset_password_expires: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    id         = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True)
-    name       = Column(String(100), nullable=False)
-    first_name = Column(String(100), nullable=True)
-    last_name  = Column(String(100), nullable=True)
-    org_name   = Column(String(255), nullable=True)
-    industry   = Column(String(100), nullable=True)
-    team_size  = Column(String(50), nullable=True)
-    plan       = Column(String(50), nullable=True)
-    email      = Column(String(150), unique=True, index=True, nullable=False)
-    password   = Column(String(255), nullable=False)   # hashed
-    role       = Column(Enum(UserRole), default=UserRole.analyst)
-    is_active  = Column(Boolean, default=False)
-    verification_code = Column(String(6), nullable=True)
-    verification_expires = Column(DateTime(timezone=True), nullable=True)
-    password_changed = Column(Boolean, default=False)
-    reset_password_token = Column(String(255), nullable=True, unique=True, index=True)
-    reset_password_expires = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    organization = relationship("Organization", back_populates="users")
+    class Settings:
+        name = "users"

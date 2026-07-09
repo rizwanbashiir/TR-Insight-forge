@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, AliasChoices, field_validator, ConfigDict
 from enum import Enum
 from datetime import datetime
 from typing import Optional
@@ -10,15 +10,15 @@ class UserRole(str, Enum):
 
 # ── Request schemas (what client sends) ──
 class RegisterRequest(BaseModel):
-    name:       Optional[str] = None
-    first_name: Optional[str] = None
-    last_name:  Optional[str] = None
     email:      EmailStr
     password:   str
+    name:       Optional[str] = None
+    first_name: Optional[str] = Field(None, validation_alias=AliasChoices("first_name", "firstName"))
+    last_name:  Optional[str] = Field(None, validation_alias=AliasChoices("last_name", "lastName"))
     role:       UserRole = UserRole.analyst
-    org_name:   Optional[str] = None
+    org_name:   Optional[str] = Field(None, validation_alias=AliasChoices("org_name", "orgName", "organization_name"))
     industry:   Optional[str] = None
-    team_size:  Optional[str] = None
+    team_size:  Optional[str] = Field(None, validation_alias=AliasChoices("team_size", "teamSize"))
     plan:       Optional[str] = None
 
 class LoginRequest(BaseModel):
@@ -27,7 +27,9 @@ class LoginRequest(BaseModel):
 
 # ── Response schemas (what server returns) ──
 class UserResponse(BaseModel):
-    id:         int
+    model_config = ConfigDict(from_attributes=True)
+
+    id:         Optional[str] = None
     name:       str
     first_name: Optional[str] = None
     last_name:  Optional[str] = None
@@ -40,8 +42,10 @@ class UserResponse(BaseModel):
     plan:       Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True   # allows SQLAlchemy model → Pydantic
+    @field_validator("id", mode="before")
+    @classmethod
+    def serialize_id(cls, v):
+        return str(v) if v is not None else None
 
 class TokenResponse(BaseModel):
     access_token: str

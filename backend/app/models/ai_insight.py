@@ -1,16 +1,18 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
-from app.config.database import Base
+from beanie import Document, PydanticObjectId
+from pydantic import Field
+from typing import Optional
+from datetime import datetime, timezone
 
-class AiInsight(Base):
-    __tablename__ = "ai_insights"
+class AIInsight(Document):
+    file_id: PydanticObjectId
+    model_name: Optional[str] = None
+    prompt_used: Optional[str] = None
+    ai_response: Optional[str] = None
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    id           = Column(Integer, primary_key=True, index=True)
-    file_id      = Column(Integer, ForeignKey("uploaded_files.id", ondelete="CASCADE"), unique=True)
-    model_name   = Column(String(100))
-    prompt_used  = Column(Text)
-    ai_response  = Column(Text)
-    generated_at = Column(DateTime(timezone=True), server_default=func.now())
+    class Settings:
+        name = "ai_insights"
+        indexes = ["file_id"]
 
-    file         = relationship("UploadedFile", back_populates="ai_insight")
+# Alias for backward compatibility
+AiInsight = AIInsight
