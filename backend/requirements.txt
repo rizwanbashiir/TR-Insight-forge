@@ -36,6 +36,7 @@ resend==2.32.2
 
 # ============ VECTOR SEARCH & EMBEDDINGS ============
 pinecone==9.0.0
+sentence-transformers>=2.6.0
 
 # ============ DATA PROCESSING & ANALYTICS ============
 numpy==1.26.4
