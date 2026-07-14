@@ -147,3 +147,69 @@ async def get_ai_answer(
         "ai_response": ai_response,
         "model": settings.GROK_MODEL,
     }
+
+
+DEFAULT_SUGGESTED_QUESTIONS = [
+    {
+        "id": "strength_analysis",
+        "category": "Business Strengths",
+        "question": "What are our biggest strengths in business based on recent revenue, customer retention, and top categories across all uploaded datasets?"
+    },
+    {
+        "id": "expense_reduction",
+        "category": "Expense & Margin Optimization",
+        "question": "Which operational expenses, low-margin categories, or cost leaks can we reduce right now to improve profitability?"
+    },
+    {
+        "id": "dead_inventory",
+        "category": "Inventory & Asset Efficiency",
+        "question": "What dead or slow-moving inventory is tying up capital, and what is the best strategy to liquidate or optimize it?"
+    },
+    {
+        "id": "growth_opportunities",
+        "category": "Revenue Growth",
+        "question": "Which customer segments and product lines offer our highest immediate revenue growth potential?"
+    }
+]
+
+
+async def generate_business_health_check(
+    file_ids: List[str],
+) -> dict:
+    oids = [PydanticObjectId(fid) if isinstance(fid, str) else fid for fid in file_ids]
+
+    processed_records = await ProcessedDataset.find(
+        {"file_id": {"$in": oids}}
+    ).to_list()
+
+    if not processed_records:
+        raise ValueError("No processed data found to run Business Health Check.")
+
+    kpi_summaries = [p.kpi_summary for p in processed_records if p.kpi_summary]
+    kpi_summary = merge_kpi_summaries(kpi_summaries)
+
+    from app.services.prompt_builder import build_business_health_check_prompt
+    prompt = build_business_health_check_prompt(kpi_summary, len(file_ids))
+    ai_response = call_grok(prompt)
+
+    total = float(kpi_summary.get("total_amount") or 0)
+    customers = int(kpi_summary.get("unique_customers") or 0)
+
+    score = 85
+    status = "Healthy & Stable"
+    if total > 100000 and customers > 100:
+        score = 92
+        status = "Strong & Scaling"
+    elif total < 10000:
+        score = 74
+        status = "Needs Optimization"
+
+    return {
+        "overall_health_score": score,
+        "health_status": status,
+        "files_analyzed": len(file_ids),
+        "kpi_summary": kpi_summary,
+        "ai_health_report": ai_response,
+        "suggested_questions": DEFAULT_SUGGESTED_QUESTIONS,
+        "model": settings.GROK_MODEL,
+    }

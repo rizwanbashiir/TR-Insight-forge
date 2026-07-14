@@ -76,6 +76,7 @@ async def upload_file(
 @router.post("/preprocess/{file_id}", status_code=200)
 async def preprocess_file(
     file_id: str,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_role("admin", "analyst")),
 ):
     oid = PydanticObjectId(file_id)
@@ -91,6 +92,7 @@ async def preprocess_file(
         raise HTTPException(status_code=400, detail="Already processing.")
 
     result = await run_preprocessing_pipeline(db=None, file_id=file_id)
+    background_tasks.add_task(embed_and_store, None, file_id)
 
     return {
         "file_id": file_id,
@@ -101,7 +103,7 @@ async def preprocess_file(
         "outliers_detected": result.outliers_detected,
         "column_types": result.column_types,
         "kpi_summary": result.kpi_summary,
-        "message": "Preprocessing complete."
+        "message": "Preprocessing complete. AI embedding started in background."
     }
 
 

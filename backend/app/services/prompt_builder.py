@@ -110,3 +110,47 @@ Provide:
 Be specific, data-driven, and practical. Address a small business owner directly."""
 
     return prompt
+
+
+def build_business_health_check_prompt(kpi_summary: dict, file_count: int) -> str:
+    """
+    Build a comprehensive Business Health Check prompt across all uploaded datasets.
+    Focuses specifically on Strengths, Expense Reduction, Dead Inventory, and Strategic Growth.
+    """
+    total_amount = kpi_summary.get("total_amount", "N/A")
+    avg_amount = kpi_summary.get("average_amount", "N/A")
+    top_category = kpi_summary.get("top_category", "N/A")
+    stores = kpi_summary.get("unique_stores", "N/A")
+    customers = kpi_summary.get("unique_customers", "N/A")
+    total_orders = kpi_summary.get("total_orders", "N/A")
+
+    monthly = kpi_summary.get("monthly_trend", [])
+    trend_summary = ""
+    if monthly:
+        peak = max(monthly, key=lambda x: x["value"])
+        lowest = min(monthly, key=lambda x: x["value"])
+        trend_summary = (
+            f"Monthly revenue spans {len(monthly)} periods. "
+            f"Peak: {peak['month']} ({peak['value']:,.2f}), Lowest: {lowest['month']} ({lowest['value']:,.2f})."
+        )
+
+    prompt = f"""You are an elite Chief Financial Officer (CFO) & AI Business Strategist analyzing data combined across {file_count} uploaded workspace datasets.
+
+Combined Workspace KPIs:
+- Total Volume / Revenue: {total_amount}
+- Average Transaction Value: {avg_amount}
+- Total Transactions / Orders: {total_orders}
+- Top Performing Category: {top_category}
+- Unique Customers: {customers}
+- {trend_summary}
+
+Please generate a comprehensive, highly structured Business Health Check report covering exactly these sections:
+1. **Executive Health Summary & Score**: Overall assessment of the business trajectory.
+2. **Key Business Strengths**: Where the business is excelling (top revenue drivers, customer loyalty, volume).
+3. **Expense & Margin Reduction Opportunities**: Specific areas where operational costs or low-margin activities can be cut to boost profit.
+4. **Dead / Slow-Moving Inventory & Idle Assets**: Analysis of underperforming categories, idle resources, or stagnant inventory tying up working capital.
+5. **Immediate 30-Day Growth Roadmap**: Concise action steps to capitalize on strengths and eliminate waste.
+
+Format your report cleanly using markdown bullet points and bold headers."""
+
+    return prompt
