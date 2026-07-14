@@ -14,9 +14,7 @@ router = APIRouter()
 class MultiForecastRequest(BaseModel):
     file_ids: List[str]
     steps: int = 6
-    model: Optional[str] = None
-    confidence: Optional[float] = 0.95
-    confidence_interval: Optional[float] = 0.95
+
 
 @router.post("/", status_code=200)
 async def forecast_multiple(
@@ -29,12 +27,23 @@ async def forecast_multiple(
     if not body.file_ids:
         raise HTTPException(status_code=400, detail="Must provide at least one file ID.")
 
-    oids = [PydanticObjectId(fid) for fid in body.file_ids]
+    fids = body.file_ids
+
+    oids = []
+    for fid in fids:
+        try:
+            oids.append(PydanticObjectId(fid))
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file ID format: '{fid}'. Must be a 24-character hex string."
+            )
+
     files = await UploadedFile.find(
         {"_id": {"$in": oids}, "organization_id": current_user.organization_id}
     ).to_list()
 
-    if len(files) != len(body.file_ids):
+    if len(files) != len(fids):
         raise HTTPException(status_code=404, detail="One or more files not found.")
 
     for file_record in files:
@@ -47,39 +56,37 @@ async def forecast_multiple(
     try:
         result = await run_arima_forecast(
             db=None,
-            file_ids=body.file_ids,
+            file_ids=fids,
             steps=body.steps,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    conf_val = body.confidence or body.confidence_interval or 0.95
-    conf_str = f"{round(conf_val * 100)}%"
+    mape_val = float(result.mape_score) if result.mape_score is not None else 0.0
 
     return {
-        "file_ids": body.file_ids,
-        "model": body.model or result.model_name,
+        "file_ids": fids,
+        "model": result.model_name,
         "arima_order": result.arima_order,
-        "mape_score": float(result.mape_score),
-        "mape": f"{round(float(result.mape_score), 1)}%",
-        "accuracy": f"{round(100 - float(result.mape_score), 1)}%",
-        "confidence": conf_str,
+        "mape_score": mape_val,
+        "mape": f"{round(mape_val, 1)}%",
+        "accuracy": f"{round(100 - mape_val, 1)}%",
+        "confidence": "95%",
         "forecast": result.forecast_data,
-        "message": f"Forecast complete for {len(body.file_ids)} files."
+        "message": f"Forecast complete for {len(fids)} files."
     }
+
 
 @router.post("/{file_id}", status_code=200)
 async def forecast(
     file_id: str,
     steps: int = 6,
-    model: Optional[str] = None,
-    confidence: Optional[float] = 0.95,
     current_user: User = Depends(require_role("admin", "analyst")),
 ):
     """
     Run ARIMA forecasting on a single uploaded sales file.
     """
-    req = MultiForecastRequest(file_ids=[file_id], steps=steps, model=model, confidence=confidence)
+    req = MultiForecastRequest(file_ids=[file_id], steps=steps)
     res = await forecast_multiple(req, current_user)
     res["file_id"] = file_id
     return res
@@ -91,7 +98,14 @@ async def get_forecast(
     current_user: User = Depends(get_current_user),
 ):
     """Get previously computed forecast for a file."""
-    oid = PydanticObjectId(file_id)
+    try:
+        oid = PydanticObjectId(file_id)
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file ID format: '{file_id}'. Must be a 24-character hex string."
+        )
+
     file_record = await UploadedFile.find_one(
         UploadedFile.id == oid,
         UploadedFile.organization_id == current_user.organization_id
@@ -109,13 +123,15 @@ async def get_forecast(
             detail="No forecast found. Run POST /forecast/{file_id} first."
         )
 
+    mape_val = float(result.mape_score) if result.mape_score is not None else 0.0
+
     return {
         "file_id": file_id,
         "model": result.model_name,
         "arima_order": result.arima_order,
-        "mape_score": float(result.mape_score),
-        "mape": f"{round(float(result.mape_score), 1)}%",
-        "accuracy": f"{round(100 - float(result.mape_score), 1)}%",
+        "mape_score": mape_val,
+        "mape": f"{round(mape_val, 1)}%",
+        "accuracy": f"{round(100 - mape_val, 1)}%",
         "confidence": "95%",
         "forecast": result.forecast_data,
         "generated_at": result.generated_at,

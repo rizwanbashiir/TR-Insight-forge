@@ -7,7 +7,7 @@ from app.utils.dependencies import get_current_user, require_role
 from app.models.users import User
 from app.models.uploaded_file import UploadedFile, FileStatus
 from app.models.ai_insight import AIInsight
-from app.services.ai_service import get_ai_answer
+from app.services.ai_service import get_ai_answer, generate_business_health_check, DEFAULT_SUGGESTED_QUESTIONS
 
 router = APIRouter()
 
@@ -17,31 +17,34 @@ class AIRequest(BaseModel):
     question: Optional[str] = None
 
 
-@router.post("/ask", status_code=200)
-async def ask_ai(
-    body: AIRequest,
-    current_user: User = Depends(require_role("admin", "analyst")),
-):
-    """
-    Ask a specific business question about your data.
-    Leave question empty for general business health report.
-    """
-    from app.services.quotas import verify_limits_and_tier
-    await verify_limits_and_tier(None, current_user.organization_id, "ai_chat")
+async def resolve_workspace_files(file_ids: Optional[List[str]], file_id: Optional[str], current_user: User) -> List[str]:
+    if file_ids:
+        resolved = file_ids
+    elif file_id:
+        resolved = [file_id]
+    else:
+        files = await UploadedFile.find(
+            {"organization_id": current_user.organization_id, "status": FileStatus.processed}
+        ).to_list()
+        if not files:
+            raise HTTPException(
+                status_code=400,
+                detail="No preprocessed files found in your workspace. Please upload and preprocess your datasets first."
+            )
+        return [str(f.id) for f in files]
 
-    resolved_file_ids = body.file_ids
-    if not resolved_file_ids:
-        if body.file_id is not None:
-            resolved_file_ids = [body.file_id]
-        else:
-            raise HTTPException(status_code=400, detail="Either file_id or file_ids must be provided.")
+    oids = []
+    for fid in resolved:
+        try:
+            oids.append(PydanticObjectId(fid))
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Invalid file ID format: '{fid}'.")
 
-    oids = [PydanticObjectId(fid) for fid in resolved_file_ids]
     files = await UploadedFile.find(
         {"_id": {"$in": oids}, "organization_id": current_user.organization_id}
     ).to_list()
 
-    if len(files) != len(resolved_file_ids):
+    if len(files) != len(resolved):
         raise HTTPException(status_code=404, detail="One or more files not found.")
 
     for file_record in files:
@@ -50,6 +53,49 @@ async def ask_ai(
                 status_code=400,
                 detail=f"File '{file_record.original_filename}' must be preprocessed first."
             )
+    return resolved
+
+
+@router.get("/suggested-questions", status_code=200)
+async def get_suggested_questions():
+    """
+    Get default suggested business questions (Strengths, Expenses, Dead Inventory, Growth).
+    """
+    return {"suggested_questions": DEFAULT_SUGGESTED_QUESTIONS}
+
+
+@router.get("/business-health-check", status_code=200)
+async def get_business_health_check(
+    file_ids: Optional[List[str]] = Query(None, description="Optional explicit file IDs"),
+    current_user: User = Depends(require_role("admin", "analyst")),
+):
+    """
+    Landing Dashboard module: comprehensive Business Health Check across all uploaded workspace files.
+    Covers Strengths, Expense Reduction, Dead Inventory, and Strategic Roadmap.
+    """
+    resolved_file_ids = await resolve_workspace_files(file_ids, None, current_user)
+    try:
+        report = await generate_business_health_check(resolved_file_ids)
+        return report
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ask", status_code=200)
+async def ask_ai(
+    body: AIRequest,
+    current_user: User = Depends(require_role("admin", "analyst")),
+):
+    """
+    Ask a specific business question across your data.
+    If file_ids is omitted, automatically queries across all preprocessed workspace datasets.
+    """
+    from app.services.quotas import verify_limits_and_tier
+    await verify_limits_and_tier(None, current_user.organization_id, "ai_chat")
+
+    resolved_file_ids = await resolve_workspace_files(body.file_ids, body.file_id, current_user)
 
     try:
         result = await get_ai_answer(
@@ -58,6 +104,7 @@ async def ask_ai(
             user_id=str(current_user.id),
             user_question=body.question,
         )
+        result["suggested_questions"] = DEFAULT_SUGGESTED_QUESTIONS
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -75,27 +122,7 @@ async def get_ai_insights(
     from app.services.quotas import verify_limits_and_tier
     await verify_limits_and_tier(None, current_user.organization_id, "ai_chat")
 
-    resolved_file_ids = file_ids
-    if not resolved_file_ids:
-        if file_id is not None:
-            resolved_file_ids = [file_id]
-        else:
-            raise HTTPException(status_code=400, detail="Either file_id or file_ids must be provided.")
-
-    oids = [PydanticObjectId(fid) for fid in resolved_file_ids]
-    files = await UploadedFile.find(
-        {"_id": {"$in": oids}, "organization_id": current_user.organization_id}
-    ).to_list()
-
-    if len(files) != len(resolved_file_ids):
-        raise HTTPException(status_code=404, detail="One or more files not found.")
-
-    for file_record in files:
-        if file_record.status not in [FileStatus.processed]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File '{file_record.original_filename}' must be preprocessed first."
-            )
+    resolved_file_ids = await resolve_workspace_files(file_ids, file_id, current_user)
 
     try:
         result = await get_ai_answer(
@@ -104,6 +131,7 @@ async def get_ai_insights(
             user_id=str(current_user.id),
             user_question=question,
         )
+        result["suggested_questions"] = DEFAULT_SUGGESTED_QUESTIONS
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

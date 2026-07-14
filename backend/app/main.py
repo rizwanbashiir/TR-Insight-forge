@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.config.database import init_db
 from app.config.settings import settings
-from app.routes import auth_routes, upload, ai, forcast, segments, billing, organizations, superadmin
+from app.routes import auth_routes, upload, ai, forcast, segments, billing, organizations, superadmin, analytics
 
 
 async def ensure_predefined_admins():
@@ -85,6 +85,7 @@ app.include_router(segments.router,      prefix="/segment",       tags=["Segment
 # app.include_router(billing.router, prefix="/billing", tags=["Billing"]) # Disabled billing and subscription APIs for now
 app.include_router(organizations.router, prefix="/organizations", tags=["Organizations"])
 app.include_router(superadmin.router,    prefix="/superadmin",    tags=["SuperAdmin"])
+app.include_router(analytics.router,     prefix="/analytics",     tags=["Analytics"])
 
 
 @app.get("/")
